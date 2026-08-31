@@ -1,0 +1,117 @@
+import React, { useState, useEffect } from 'react'
+import { signIn, signOut, useSession } from 'next-auth/react'
+
+async function api(path, opts) {
+  const res = await fetch('/api' + path, Object.assign({ headers: { 'Content-Type': 'application/json' } }, opts));
+  return res.json();
+}
+
+export default function Home(){
+  const { data: session } = useSession();
+  const [email, setEmail] = useState('');
+  const [areas, setAreas] = useState([]);
+  const [maquinas, setMaquinas] = useState([]);
+  const [form, setForm] = useState({ solicitante: '', area: '', maquina: '', urgencia: 'Baja', descripcion: '' });
+  const [tiques, setTiques] = useState([]);
+
+  useEffect(()=>{ loadCatalogs() }, []);
+
+  async function handleSignIn(e){
+    e && e.preventDefault();
+    if(!email) return alert('Ingresa correo');
+    const res = await signIn('credentials', { redirect: false, email, password: '' });
+    if(res.error) alert(res.error);
+    else window.location.reload();
+  }
+
+  async function loadCatalogs(){
+    const a = await api('/areas'); setAreas((a.areas||[]).map(x=>x.nombre));
+    const m = await api('/maquinas'); setMaquinas((m.maquinas||[]).map(x=>x.nombre));
+    const t = await api('/tickets'); setTiques(t.tiques||[]);
+  }
+
+  async function enviarReporte(e){
+    e && e.preventDefault();
+    if(!form.solicitante||!form.area||!form.maquina||!form.descripcion) return alert('Completa todos los campos.');
+    const r = await api('/tickets', { method: 'POST', body: JSON.stringify(form) });
+    if(r.error) return alert(r.error);
+    alert('Tique creado: ' + r.id); setForm({ solicitante:'', area:'', maquina:'', urgencia:'Baja', descripcion:'' }); loadCatalogs();
+  }
+
+  if(!session) {
+    return (
+      <div className="container" style={{maxWidth:520,margin:'60px auto'}}>
+        <div className="card">
+          <h2>Iniciar Sesión</h2>
+          <form onSubmit={handleSignIn}>
+            <input type="email" placeholder="correo@empresa.com" value={email} onChange={e=>setEmail(e.target.value)} />
+            <button type="submit">Entrar</button>
+          </form>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="container">
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+        <h2>Sistema de Mantenimiento</h2>
+        <div>
+          <span style={{marginRight:12}}>Hola, {session.user.name || session.user.email} ({session.user.role})</span>
+          <button onClick={()=>signOut()}>Cerrar sesión</button>
+        </div>
+      </div>
+
+      <div className="card" style={{marginTop:12}}>
+        <h3>Reportar Falla</h3>
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
+          <div>
+            <label>Tu nombre</label>
+            <input value={form.solicitante} onChange={e=>setForm({...form,solicitante:e.target.value})} />
+          </div>
+          <div>
+            <label>Urgencia</label>
+            <select value={form.urgencia} onChange={e=>setForm({...form,urgencia:e.target.value})}><option>Baja</option><option>Media</option><option>Alta</option><option>Parada de Planta</option></select>
+          </div>
+          <div>
+            <label>Área</label>
+            <select value={form.area} onChange={e=>setForm({...form,area:e.target.value})}><option value="">Seleccione</option>{areas.map(a=><option key={a}>{a}</option>)}</select>
+          </div>
+          <div>
+            <label>Máquina</label>
+            <select value={form.maquina} onChange={e=>setForm({...form,maquina:e.target.value})}><option value="">Seleccione</option>{maquinas.map(m=><option key={m}>{m}</option>)}</select>
+          </div>
+        </div>
+        <label>Descripción</label>
+        <textarea value={form.descripcion} onChange={e=>setForm({...form,descripcion:e.target.value})} rows={5}></textarea>
+        <button onClick={enviarReporte}>Enviar Tique</button>
+      </div>
+
+      <div className="card" style={{marginTop:12}}>
+        <h3>Lista de Tiques</h3>
+        <div style={{overflowX:'auto'}}>
+          <table style={{width:'100%',borderCollapse:'collapse'}}>
+            <thead style={{background:'#2563eb',color:'#fff'}}>
+              <tr><th>ID</th><th>Fecha</th><th>Solicitante</th><th>Area</th><th>Máquina</th><th>Fallo</th><th>Urgencia</th><th>Estado</th></tr>
+            </thead>
+            <tbody>
+              {tiques.length===0 && <tr><td colSpan={8}>No hay tiques.</td></tr>}
+              {tiques.map(t=>(
+                <tr key={t.id} style={{borderBottom:'1px solid #eee'}}>
+                  <td><strong>{t.id}</strong></td>
+                  <td>{t.fecha_creacion}</td>
+                  <td>{t.solicitante}</td>
+                  <td>{t.area}</td>
+                  <td>{t.maquina}</td>
+                  <td>{t.descripcion}</td>
+                  <td>{t.urgencia}</td>
+                  <td>{t.estado}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  )
+}

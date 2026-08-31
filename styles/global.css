@@ -1,0 +1,12 @@
+:root{
+  --bg:#f4f6f9;
+  --card:#fff;
+  --primary:#2563eb;
+  --muted:#6b7280;
+}
+body{font-family:Inter,Arial,Helvetica,sans-serif;background:var(--bg);margin:0;padding:18px;color:#111}
+.container{max-width:1200px;margin:0 auto}
+.card{background:var(--card);padding:18px;border-radius:10px;box-shadow:0 2px 10px rgba(0,0,0,0.06);}
+input,select,textarea{width:100%;padding:10px;margin:8px 0;border:1px solid #e6eef8;border-radius:8px}
+button{background:var(--primary);color:#fff;border:none;padding:10px 14px;border-radius:8px;cursor:pointer}
+@media(max-width:768px){body{padding:12px}}
