@@ -1,6 +1,6 @@
 const db = require('../../lib/db');
 
-module.exports = async function handler(req,res){
+async function handler(req,res){
   if(req.method==='GET'){
     const { ticket_id } = req.query || {};
     if(ticket_id){
@@ -12,4 +12,6 @@ module.exports = async function handler(req,res){
   }
 
   return res.status(405).json({ error: 'Method not allowed' });
-};
+}
+
+export default handler;

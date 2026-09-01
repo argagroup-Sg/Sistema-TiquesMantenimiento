@@ -1,5 +1,8 @@
 import React, { useState, useEffect } from 'react'
-import { signIn, signOut, useSession } from 'next-auth/react'
+import { signIn, signOut, useSession, getSession } from 'next-auth/react'
+import { useToast } from '../components/ToastProvider'
+import { useRouter } from 'next/router'
+import { formatDate, statusClass } from '../lib/format'
 
 async function api(path, opts) {
   const res = await fetch('/api' + path, Object.assign({ headers: { 'Content-Type': 'application/json' } }, opts));
@@ -8,7 +11,9 @@ async function api(path, opts) {
 
 export default function Home(){
   const { data: session } = useSession();
+  const router = useRouter();
   const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [areas, setAreas] = useState([]);
   const [maquinas, setMaquinas] = useState([]);
   const [form, setForm] = useState({ solicitante: '', area: '', maquina: '', urgencia: 'Baja', descripcion: '' });
@@ -16,12 +21,30 @@ export default function Home(){
 
   useEffect(()=>{ loadCatalogs() }, []);
 
+  useEffect(()=>{
+    // if logged in, redirect to role-specific dashboard
+    if(session){
+      const role = ((session.user?.role || session.user?.rol || '') + '').toString().toLowerCase();
+      if(role === 'admin') return router.replace('/admin');
+      if(role === 'tecnico') return router.replace('/tecnico');
+      return router.replace('/empleado');
+    }
+  }, [session]);
+
+  const showToast = useToast()
+
   async function handleSignIn(e){
     e && e.preventDefault();
-    if(!email) return alert('Ingresa correo');
-    const res = await signIn('credentials', { redirect: false, email, password: '' });
-    if(res.error) alert(res.error);
-    else window.location.reload();
+    if(!email) return showToast('Ingresa correo', 'error');
+    if(!password) return showToast('Ingresa contraseña', 'error');
+    const res = await signIn('credentials', { redirect: false, email, password });
+    if(res?.error) return showToast(res.error || 'Error de autenticación', 'error');
+    // redirect based on role without full reload
+    const session = await getSession();
+    const role = ((session?.user?.role || session?.user?.rol || '') + '').toString().toLowerCase();
+    if(role === 'admin') return router.replace('/admin');
+    if(role === 'tecnico') return router.replace('/tecnico');
+    return router.replace('/empleado');
   }
 
   async function loadCatalogs(){
@@ -32,10 +55,10 @@ export default function Home(){
 
   async function enviarReporte(e){
     e && e.preventDefault();
-    if(!form.solicitante||!form.area||!form.maquina||!form.descripcion) return alert('Completa todos los campos.');
+    if(!form.solicitante||!form.area||!form.maquina||!form.descripcion) return showToast('Completa todos los campos.', 'error');
     const r = await api('/tickets', { method: 'POST', body: JSON.stringify(form) });
-    if(r.error) return alert(r.error);
-    alert('Tique creado: ' + r.id); setForm({ solicitante:'', area:'', maquina:'', urgencia:'Baja', descripcion:'' }); loadCatalogs();
+    if(r.error) return showToast(r.error, 'error');
+    showToast('Tique creado: ' + r.id, 'success'); setForm({ solicitante:'', area:'', maquina:'', urgencia:'Baja', descripcion:'' }); loadCatalogs();
   }
 
   if(!session) {
@@ -45,6 +68,7 @@ export default function Home(){
           <h2>Iniciar Sesión</h2>
           <form onSubmit={handleSignIn}>
             <input type="email" placeholder="correo@empresa.com" value={email} onChange={e=>setEmail(e.target.value)} />
+            <input type="password" placeholder="Contraseña" value={password} onChange={e=>setPassword(e.target.value)} />
             <button type="submit">Entrar</button>
           </form>
         </div>
@@ -97,16 +121,16 @@ export default function Home(){
             <tbody>
               {tiques.length===0 && <tr><td colSpan={8}>No hay tiques.</td></tr>}
               {tiques.map(t=>(
-                <tr key={t.id} style={{borderBottom:'1px solid #eee'}}>
-                  <td><strong>{t.id}</strong></td>
-                  <td>{t.fecha_creacion}</td>
-                  <td>{t.solicitante}</td>
-                  <td>{t.area}</td>
-                  <td>{t.maquina}</td>
-                  <td>{t.descripcion}</td>
-                  <td>{t.urgencia}</td>
-                  <td>{t.estado}</td>
-                </tr>
+                  <tr key={t.id} style={{borderBottom:'1px solid #eee'}}>
+                    <td><strong>{t.id}</strong></td>
+                    <td>{formatDate(t.fecha_creacion || t.fecha)}</td>
+                    <td>{t.solicitante}</td>
+                    <td>{t.area}</td>
+                    <td>{t.maquina}</td>
+                    <td>{t.descripcion}</td>
+                    <td>{t.urgencia}</td>
+                    <td><span className={"badge " + statusClass(t.estado)}>{t.estado || 'Abierto'}</span></td>
+                  </tr>
               ))}
             </tbody>
           </table>

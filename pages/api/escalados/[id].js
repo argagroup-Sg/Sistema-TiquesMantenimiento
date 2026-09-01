@@ -1,6 +1,6 @@
-const db = require('../../../../lib/db');
+const db = require('../../../lib/db');
 
-module.exports = async function handler(req,res){
+async function handler(req,res){
   const { id } = req.query || {};
   if(!id) return res.status(400).json({ error: 'Id requerido' });
 
@@ -40,4 +40,6 @@ module.exports = async function handler(req,res){
   }
 
   return res.status(405).json({ error: 'Method not allowed' });
-};
+}
+
+export default handler;

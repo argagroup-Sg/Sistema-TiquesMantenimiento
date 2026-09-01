@@ -1,10 +1,16 @@
 const db = require('../../lib/db');
+const { getUserFromReq, requireRole } = require('../../lib/auth');
 function sanitize(s){return String(s||'').trim();}
 
-module.exports = async function handler(req,res){
+async function handler(req,res){
   if(req.method==='GET'){
     const r = await db.query('SELECT id,nombre FROM maquinas ORDER BY nombre');
     return res.json({ maquinas: r.rows });
+  }
+
+  const user = await getUserFromReq(req);
+  if (!requireRole(user, ['admin'])) {
+    return res.status(403).json({ error: 'No autorizado' });
   }
 
   if(req.method==='POST'){
@@ -28,4 +34,6 @@ module.exports = async function handler(req,res){
   }
 
   return res.status(405).json({ error: 'Method not allowed' });
-};
+}
+
+export default handler;

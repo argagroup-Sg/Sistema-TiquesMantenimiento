@@ -1,7 +1,13 @@
-const db = require('../../../lib/db');
+const db = require('../../lib/db');
 const bcrypt = require('bcryptjs');
+const { getUserFromReq, requireRole } = require('../../lib/auth');
 
-module.exports = async function handler(req, res) {
+async function handler(req, res) {
+  const user = await getUserFromReq(req);
+  if (!requireRole(user, ['admin'])) {
+    return res.status(403).json({ error: 'No autorizado' });
+  }
+
   if (req.method === 'GET') {
     const result = await db.query('SELECT id, email, nombre, rol, created_at FROM users ORDER BY id DESC');
     return res.json({ users: result.rows });
@@ -23,4 +29,6 @@ module.exports = async function handler(req, res) {
   }
 
   return res.status(405).json({ error: 'Method not allowed' });
-};
+}
+
+export default handler;
