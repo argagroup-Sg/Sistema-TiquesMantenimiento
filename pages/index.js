@@ -64,12 +64,21 @@ export default function Home(){
   if(!session) {
     return (
       <div className="container" style={{maxWidth:520,margin:'60px auto'}}>
-        <div className="card">
-          <h2>Iniciar Sesión</h2>
-          <form onSubmit={handleSignIn}>
-            <input type="email" placeholder="correo@empresa.com" value={email} onChange={e=>setEmail(e.target.value)} />
-            <input type="password" placeholder="Contraseña" value={password} onChange={e=>setPassword(e.target.value)} />
-            <button type="submit">Entrar</button>
+        <div className="card" style={{textAlign:'center'}}>
+          <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:12}}>
+            <div style={{width:80,height:80,borderRadius:12,background:'linear-gradient(135deg,#2563eb,#7c3aed)',display:'flex',alignItems:'center',justifyContent:'center',color:'#fff',fontWeight:700,fontSize:24}}>SM</div>
+            <h2 style={{margin:0}}>Sistema de Mantenimiento</h2>
+            <p style={{margin:0,color:'#6b7280'}}>Inicia sesión con tu cuenta de empresa</p>
+          </div>
+          <form onSubmit={handleSignIn} style={{marginTop:18}}>
+            <div className="form-row">
+              <input type="email" placeholder="correo@empresa.com" value={email} onChange={e=>setEmail(e.target.value)} />
+              <input type="password" placeholder="Contraseña" value={password} onChange={e=>setPassword(e.target.value)} />
+            </div>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginTop:8}}>
+              <label style={{fontSize:13,color:'#6b7280'}}><input type="checkbox" style={{marginRight:8}} /> Recordarme</label>
+              <button type="submit">Entrar</button>
+            </div>
           </form>
         </div>
       </div>

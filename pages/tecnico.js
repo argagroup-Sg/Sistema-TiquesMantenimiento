@@ -19,12 +19,17 @@ export default function Tecnico(){
     try{ const r = await api('/tickets'); setTiques(r.tiques || []); }catch(err){ console.error(err); }
   }
 
+  const [escalados, setEscalados] = useState([]);
+  async function loadEscalados(){
+    try{ const r = await api('/escalados'); setEscalados(r.escalados || []); }catch(err){ console.error(err); }
+  }
+
   async function loadTecnicos(){
     try{ const r = await api('/tecnicos'); setTecnicos(r.tecnicos||[]); }catch(e){ console.error(e); }
   }
   useEffect(()=>{ if(session) loadTecnicos(); }, [session]);
+  useEffect(()=>{ if(session) loadEscalados(); }, [session]);
 
-  const showToast = require('../components/ToastProvider').useToast ? require('../components/ToastProvider').useToast() : () => {}
 
   async function guardar(id){
     const ad = actionData[id] || {};
@@ -81,27 +86,56 @@ export default function Tecnico(){
                   <td data-label="Estado"><span className={"badge " + statusClass(t.estado)}>{t.estado}</span></td>
                   <td data-label="Acción">
                     <div style={{display:'flex',flexDirection:'column',gap:8}}>
-                      <select value={(actionData[t.id] && actionData[t.id].estado) || t.estado || 'Abierto'} onChange={e=>setActionData(a=>({ ...a, [t.id]: { ...(a[t.id]||{}), estado: e.target.value } }))}>
-                        <option>Abierto</option>
-                        <option>En Proceso</option>
-                        <option>En Espera</option>
-                        <option>Resuelto</option>
-                        <option>Escalado a Servidor Externo</option>
-                      </select>
-                      <textarea placeholder="Nota/acción" value={(actionData[t.id] && actionData[t.id].nota) || ''} onChange={e=>setActionData(a=>({ ...a, [t.id]: { ...(a[t.id]||{}), nota: e.target.value } }))} rows={2} />
-                      <div style={{display:'flex',gap:8}}>
-                        <select value={(actionData[t.id] && actionData[t.id].tecnico) || (t.tecnico || '')} onChange={e=>setActionData(a=>({ ...a, [t.id]: { ...(a[t.id]||{}), tecnico: e.target.value } }))}>
-                          <option value="">-- Técnico --</option>
-                          {tecnicos.filter(tc=> (tc.rol||'').toLowerCase()!=='empleado').map(tc=> (
-                            <option key={tc.email||tc.id} value={tc.email||tc.id}>{(tc.nombre || tc.email) + ' (' + (tc.rol||'') + ')'}</option>
-                          ))}
-                        </select>
-                        <button onClick={()=>guardar(t.id)} disabled={actionLoading}>{actionLoading? 'Procesando...':'Actualizar'}</button>
-                        <button onClick={()=>asignar(t.id, (actionData[t.id] && actionData[t.id].tecnico) || t.tecnico)} disabled={actionLoading}>{actionLoading? '...':'Asignar'}</button>
-                        <button onClick={()=>escalar(t.id)} disabled={actionLoading} style={{marginLeft:8}}>{actionLoading? '...':'Escalar'}</button>
-                      </div>
+                      {(() => {
+                        const bloqueado = ((t.estado||'') + '').toLowerCase() === 'resuelto';
+                        return (
+                          <>
+                            <select disabled={bloqueado} value={(actionData[t.id] && actionData[t.id].estado) || t.estado || 'Abierto'} onChange={e=>setActionData(a=>({ ...a, [t.id]: { ...(a[t.id]||{}), estado: e.target.value } }))}>
+                              <option>Abierto</option>
+                              <option>En Proceso</option>
+                              <option>En Espera</option>
+                              <option>Resuelto</option>
+                              <option>Escalado a Servidor Externo</option>
+                            </select>
+                            <textarea disabled={bloqueado} placeholder="Nota/acción" value={(actionData[t.id] && actionData[t.id].nota) || ''} onChange={e=>setActionData(a=>({ ...a, [t.id]: { ...(a[t.id]||{}), nota: e.target.value } }))} rows={2} />
+                            <div style={{display:'flex',gap:8}}>
+                              <select disabled={bloqueado} value={(actionData[t.id] && actionData[t.id].tecnico) || (t.tecnico || '')} onChange={e=>setActionData(a=>({ ...a, [t.id]: { ...(a[t.id]||{}), tecnico: e.target.value } }))}>
+                                <option value="">-- Técnico --</option>
+                                {tecnicos.filter(tc=> (tc.rol||'').toLowerCase()!=='empleado').map(tc=> (
+                                  <option key={tc.email||tc.id} value={tc.email||tc.id}>{(tc.nombre || tc.email) + ' (' + (tc.rol||'') + ')'}</option>
+                                ))}
+                              </select>
+                              <button onClick={()=>guardar(t.id)} disabled={actionLoading || bloqueado}>{actionLoading? 'Procesando...':'Actualizar'}</button>
+                              <button onClick={()=>asignar(t.id, (actionData[t.id] && actionData[t.id].tecnico) || t.tecnico)} disabled={actionLoading || bloqueado}>{actionLoading? '...':'Asignar'}</button>
+                              <button onClick={()=>escalar(t.id)} disabled={actionLoading || bloqueado} style={{marginLeft:8}}>{actionLoading? '...':'Escalar'}</button>
+                            </div>
+                          </>
+                        )
+                      })()}
                     </div>
                   </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div className="card" style={{marginTop:12}}>
+        <h3>Escalados / Servidores Externos</h3>
+        <div style={{overflowX:'auto'}}>
+          <table>
+            <thead><tr><th>ID Tique</th><th>Fecha Escalado</th><th>Proveedor</th><th>Estado</th><th>Responsable</th><th>Nota</th><th>Observaciones</th></tr></thead>
+            <tbody>
+              {escalados.length===0 && <tr><td colSpan={7}>No hay registros de escalado.</td></tr>}
+              {escalados.map(e=> (
+                <tr key={e.id}>
+                  <td>{e.ticket_id}</td>
+                  <td>{formatDate(e.fecha_escalado)}</td>
+                  <td>{e.proveedor}</td>
+                  <td><span className={"badge " + statusClass(e.estado)}>{e.estado}</span></td>
+                  <td>{e.responsable}</td>
+                  <td>{e.nota}</td>
+                  <td>{e.observaciones}</td>
                 </tr>
               ))}
             </tbody>

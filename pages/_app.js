@@ -38,7 +38,9 @@ export default function App({ Component, pageProps: { session, ...pageProps }}){
       {showSpeed && <SpeedInsights />}
       <ToastProvider>
         <Layout>
-          <Component {...pageProps} />
+          <div style={{padding:'18px 0'}}>
+            <Component {...pageProps} />
+          </div>
         </Layout>
       </ToastProvider>
     </SessionProvider>
