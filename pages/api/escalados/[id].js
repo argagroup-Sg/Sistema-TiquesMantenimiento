@@ -10,7 +10,7 @@ async function handler(req,res){
   }
 
   if(req.method==='PUT'){
-    const { estado, proveedor, responsable, nota, observaciones } = req.body || {};
+    const { estado, proveedor, responsable, nota, observaciones, solicitante, area, maquina, urgencia, descripcion } = req.body || {};
     const fields = [];
     const vals = [];
     let idx = 1;
@@ -19,6 +19,11 @@ async function handler(req,res){
     if(responsable!==undefined){ fields.push(`responsable=$${idx++}`); vals.push(responsable); }
     if(nota!==undefined){ fields.push(`nota=$${idx++}`); vals.push(nota); }
     if(observaciones!==undefined){ fields.push(`observaciones=$${idx++}`); vals.push(observaciones); }
+    if(solicitante!==undefined){ fields.push(`solicitante=$${idx++}`); vals.push(solicitante); }
+    if(area!==undefined){ fields.push(`area=$${idx++}`); vals.push(area); }
+    if(maquina!==undefined){ fields.push(`maquina=$${idx++}`); vals.push(maquina); }
+    if(urgencia!==undefined){ fields.push(`urgencia=$${idx++}`); vals.push(urgencia); }
+    if(descripcion!==undefined){ fields.push(`descripcion=$${idx++}`); vals.push(descripcion); }
     if(!fields.length) return res.status(400).json({ error: 'Nada para actualizar' });
     const q = `UPDATE escalados SET ${fields.join(',')} WHERE id=$${idx}`;
     vals.push(id);
