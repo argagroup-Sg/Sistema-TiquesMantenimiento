@@ -23,6 +23,7 @@ export default function Login(){
     const session = await getSession()
     const role = session?.user?.rol || session?.user?.role
     if(role === 'admin') return router.push('/admin')
+    if(role === 'super') return router.push('/super')
     if(role === 'tecnico' || role === 'técnico') return router.push('/tecnico')
     return router.push('/empleado')
   }
