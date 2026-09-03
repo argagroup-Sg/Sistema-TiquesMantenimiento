@@ -2,9 +2,5 @@
   "version": 2,
   "builds": [
     { "src": "package.json", "use": "@vercel/next" }
-  ],
-  "env": {
-    "DATABASE_URL": "@vercel_postgres",
-    "JWT_SECRET": "@jwt_secret"
-  }
+  ]
 }
