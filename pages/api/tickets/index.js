@@ -8,22 +8,28 @@ function generateTicketId() {
 
 async function handler(req, res) {
   if (req.method === 'GET') {
-    // Determine caller role and email from session/token
+    // Determinar rol del llamante y correo desde sesión/token
     const user = await getUserFromReq(req);
     try {
-      if (user && (user.role || user.rol) && String((user.role || user.rol)).toLowerCase() === 'admin') {
+      if (user && (user.role || user.rol) && ['admin','super'].includes(String((user.role || user.rol)).toLowerCase())) {
         const result = await db.query('SELECT * FROM tickets ORDER BY fecha_creacion DESC');
         return res.json({ tiques: result.rows });
       }
 
       if (user && (user.role || user.rol) && String((user.role || user.rol)).toLowerCase() === 'tecnico') {
-        const email = user.email || user.email?.toString();
-        const result = await db.query('SELECT * FROM tickets WHERE lower(tecnico)=lower($1) ORDER BY fecha_creacion DESC', [email]);
+        const email = (user.email || '').toString();
+        const uid = (user.id || user.sub || '').toString();
+        const name = (user.name || user.nombre || '').toString();
+        // coincidir técnico almacenado como email, id o nombre
+        const result = await db.query(
+          `SELECT * FROM tickets WHERE lower(tecnico)=lower($1) OR tecnico=$2 OR lower(tecnico)=lower($3) ORDER BY fecha_creacion DESC`,
+          [email, uid, name]
+        );
         return res.json({ tiques: result.rows });
       }
 
       if (user && (user.role || user.rol) && String((user.role || user.rol)).toLowerCase() === 'empleado') {
-        // show tickets created by this user (match by email or name)
+        // mostrar tiques creados por este usuario (coincidir por email o nombre)
         const email = (user.email || '').toString();
         const name = (user.name || user.nombre || '').toString();
         const result = await db.query(
@@ -33,7 +39,7 @@ async function handler(req, res) {
         return res.json({ tiques: result.rows });
       }
 
-      // unauthenticated or no matching role: return empty list to avoid leaking data
+      // no autenticado o sin rol coincidente: devolver lista vacía para evitar filtrar datos
       return res.json({ tiques: [] });
     } catch (err) {
       console.error(err);

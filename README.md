@@ -1,32 +1,37 @@
-# Sistema de Mantenimiento — Migración a Next.js + Vercel Postgres
 
-Resumen rápido:
-- Proyecto Next.js con API routes para reemplazar Google Apps Script.
-- Conexión a Vercel Postgres via `DATABASE_URL`.
-- Autenticación inicial con JWT (login por email). Puedes integrar Auth0/Clerk/NextAuth más adelante.
+# Sistema de Mantenimiento — Next.js
 
-Pasos para ejecutar localmente:
+Este repositorio contiene la aplicación "Sistema de Mantenimiento" migrada a Next.js (Pages router). Incluye API routes para CRUD y autenticación (NextAuth con Credentials + un endpoint JWT para casos E2E).
 
+Resumen rápido
+- Next.js + API routes
+- Conexión a Postgres (DATABASE_URL)
+- Autenticación: NextAuth (Credentials) y endpoint `/api/auth/login` para JWT
+
+Requisitos locales
+- Node >= 16 (recomendado 18+)
+- PostgreSQL (Vercel Postgres, Neon o local)
+
+Instalación y ejecución local
 1. Instalar dependencias
 
 ```bash
-cd "next-app"
+cd next-app
 npm install
 ```
 
-2. Crear la base de datos en Vercel Postgres o local Postgres y ejecutar `schema.sql`:
+2. Crear `.env.local` (no lo subas al repo). Copia `.env.example` y rellena valores:
+
+- `DATABASE_URL` — cadena de conexión a Postgres
+- `NEXTAUTH_URL` — URL de la app en dev (ej. `http://localhost:3000`)
+- `NEXTAUTH_SECRET` — secreto fuerte
+- `JWT_SECRET` — (opcional) si usas endpoints JWT
+
+3. Crear tablas en la DB
 
 ```bash
-# Usando psql
-psql $DATABASE_URL -f schema.sql
+psql "$DATABASE_URL" -f schema.sql
 ```
-
-3. Crear archivo `.env.local` con variables (puedes copiar `.env.example`). Variables importantes:
-
-- `DATABASE_URL` — connection string a Postgres (Vercel Postgres / Neon / local)
-- `NEXTAUTH_URL` — URL pública/local de la app (ej. `http://localhost:3006` en dev)
-- `NEXTAUTH_SECRET` — secreto para NextAuth y JWT (usar valor fuerte en producción)
-- `JWT_SECRET` — (opcional) alias para compatibilidad con tokens JWT existentes
 
 4. Ejecutar en desarrollo
 
@@ -34,67 +39,67 @@ psql $DATABASE_URL -f schema.sql
 npm run dev
 ```
 
-Deploy en Vercel:
-- Conectar el repositorio a Vercel.
-- Añadir variables de entorno en Vercel (Settings > Environment Variables):
-	- `DATABASE_URL` — connection string a Vercel Postgres
-	- `NEXTAUTH_URL` — la URL pública del despliegue (ej. https://tu-app.vercel.app)
-	- `NEXTAUTH_SECRET` — secreto fuerte para NextAuth
-	- `JWT_SECRET` — (opcional) si aún usas tokens JWT
-- Deploy automático desde la rama principal.
+Verificación rápida
+- Abrir `http://localhost:3000` y probar el login.
+- Revisar `/admin` y `/super` según roles.
 
-Notas y siguientes pasos recomendados:
-- Endpoints ya implementados: `areas`, `maquinas`, `proveedores`, `escalados`, `tickets`, `users` y `tecnicos`.
-- Autenticación: hay soporte dual durante la migración:
-	- `NextAuth` con provider `credentials` (usa cookies de sesión en el navegador).
-	- Endpoint `/api/auth/login` que emite un JWT para pruebas programáticas y clientes API.
-- Recomendación: en producción usa `NextAuth` con `NEXTAUTH_SECRET` y `NEXTAUTH_URL`. Mantener `/api/auth/login` es útil para scripts/E2E.
-- Añadir validaciones y tests automáticos.
-- Opcional: migrar la UI completa de `Index.html` a componentes React más detallados.
+Checklist antes del deploy (revisa estos puntos)
+- [ ] `NEXTAUTH_URL` y `NEXTAUTH_SECRET` configurados correctamente
+- [ ] `DATABASE_URL` apuntando a la DB de producción (o Vercel Postgres)
+- [ ] Ejecutadas migraciones / `schema.sql` en la DB objetivo
+- [ ] Ejecutar `npm run build` localmente para detectar errores de compilación
+- [ ] Tests (si aplica) pasan: `npm run test`
+- [ ] Revisar callbacks de NextAuth: `jwt` y `session` exponen `role`/`rol` (ya está implementado)
+- [ ] `signOut({ callbackUrl: '/auth/login' })` redirige correctamente (se manejó la callback de redirect para rutas relativas)
 
-Comandos útiles adicionales
-
-- Ejecutar tests:
+Preparar repo y deploy a GitHub
+1. Inicializar git y push al repo remoto (ejemplo):
 
 ```bash
-npm run test
+cd next-app
+git init
+git add .
+git commit -m "Import: Sistema de Mantenimiento (Next.js)"
+git remote add origin https://github.com/tu-usuario/tu-repo.git
+git push -u origin main
 ```
 
-- Build para producción:
+Despliegue en Vercel (pasos)
+1. Ir a https://vercel.com y crear un proyecto importando el repositorio GitHub.
+2. En Vercel > Project > Settings > Environment Variables, añadir las variables que uso la app:
+
+- `DATABASE_URL` — connection string a Postgres (Production)
+- `NEXTAUTH_URL` — URL pública del despliegue (ej. `https://tu-app.vercel.app`)
+- `NEXTAUTH_SECRET` — secreto fuerte
+- `JWT_SECRET` — (opcional)
+
+Notas sobre entornos en Vercel:
+- Añade cada variable de entorno para los scopes `Preview` y `Production` (y `Development` si quieres).
+- No subas `.env.local` al repo. En Vercel la UI guarda las variables de entorno y se inyectan en tiempo de build/runtime.
+
+Usar Vercel CLI (opcional) para añadir variables:
 
 ```bash
-npm run build
+npx vercel login
+vercel env add DATABASE_URL production
+vercel env add NEXTAUTH_URL production
+vercel env add NEXTAUTH_SECRET production
 ```
 
-Despliegue en Vercel (resumen)
+Checklist post-deploy
+- [ ] Revisar `Build Logs` en Vercel para errores
+- [ ] Verificar rutas principales: `/`, `/auth/login`, `/admin`, `/super`
+- [ ] Probar cerrar sesión y comprobar redirect a `/auth/login` (en la misma host)
+- [ ] Comprobar que las APIs funcionan y que la app puede leer/escribir en la DB
 
-1. Crear un repositorio en GitHub y push del contenido de la carpeta `next-app`.
-2. Importar el proyecto en Vercel (Import Project).
-3. Añadir variables de entorno en Vercel (Settings > Environment Variables):
-	- `DATABASE_URL` — connection string a Vercel Postgres o Neon/Heroku/Postgres
-	- `JWT_SECRET` — secreto fuerte para NextAuth y JWT
-4. Vercel ejecutará `npm run build` y desplegará la app.
+Buenas prácticas y seguridad
+- No incluyas `.env.local` en el repo
+- Rota secretos si los compartiste accidentalmente
+- Usa usuarios DB con mínimos privilegios
+- Configura backups y monitorización para la base de datos
 
-Ejecutar migraciones (crear tablas) en la DB antes de usar la app:
 
-```bash
-# usando psql (ejemplo):
-psql "$DATABASE_URL" -f schema.sql
-```
 
-Seguridad y buenas prácticas
+---
 
-- No incluyas `.env.local` en el repo. Rota las credenciales si las compartiste.
-- Usa un usuario/contraseña con privilegios mínimos para la app.
-- Considera integrar un proveedor SSO (Auth0/Clerk) para producción.
-
-CI / Tests
-
-- Hay un workflow en `.github/workflows/ci.yml` que ejecuta tests en cada push/PR a `main`.
-
-Siguientes acciones disponibles
-
-- Puedo crear el repositorio en GitHub y empujar los archivos por ti (proporciona la URL de repo o autorización para ejecutar comandos locales).
-- Puedo configurar Vercel y ayudarte a añadir las variables de entorno.
-- Puedo integrar Auth0/Clerk para SSO en producción.
 

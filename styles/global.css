@@ -1,55 +1,318 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800&display=swap');
+
 :root{
-  --bg:#f4f6f9;
-  --card:#fff;
-  --primary:#2563eb;
-  --muted:#6b7280;
+  --bg: #f6f8fb;
+  --card: #ffffff;
+  --primary: #1f6feb;
+  --primary-600: #1558c6;
+  --muted: #6b7280;
+  --accent: #7c3aed;
+  --success: #10b981;
+  --warning: #f59e0b;
+  --danger: #ef4444;
+  --glass: rgba(255,255,255,0.6);
 }
-body{font-family:Inter,Arial,Helvetica,sans-serif;background:var(--bg);margin:0;padding:18px;color:#111}
-.container{max-width:1200px;margin:0 auto;padding:0 18px}
-.header{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px}
-.brand{font-size:20px;font-weight:700;color:var(--primary)}
-.role-badge{display:inline-block;background:#eef2ff;color:var(--primary);padding:4px 8px;border-radius:999px;margin-left:8px;font-size:12px}
-.card{background:var(--card);padding:18px;border-radius:12px;box-shadow:0 6px 18px rgba(16,24,40,0.06);} 
-.form-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-input,select,textarea{width:100%;padding:10px;margin:8px 0;border:1px solid #e6eef8;border-radius:8px;background:#fff}
-button{background:var(--primary);color:#fff;border:none;padding:10px 14px;border-radius:8px;cursor:pointer}
-.btn-secondary{background:#eef2ff;color:var(--primary);border:1px solid #dbeafe}
+
+
+html,body{height:100%}
+body{
+  font-family: Inter, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;
+  background: var(--bg);
+  margin:0;
+  padding:18px;
+  color:#0f172a;
+  -webkit-font-smoothing:antialiased;
+  -moz-osx-font-smoothing:grayscale;
+}
+
+.container{max-width:1280px;margin:0 auto;padding:0 18px}
+.header{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px}
+.brand{font-size:22px;font-weight:800;color:var(--primary);letter-spacing:-0.2px}
+.role-badge{display:inline-flex;align-items:center;background:#eef2ff;color:var(--primary);padding:6px 10px;border-radius:999px;margin-left:8px;font-size:12px}
+
+.card{background:var(--card);padding:20px;border-radius:14px;box-shadow:0 12px 30px rgba(16,24,40,0.08);border:1px solid rgba(16,24,40,0.03)}
+.card h3, .card h4{margin-top:0}
+
+/* Filter bar in reports */
+.filter-bar{display:flex;gap:12px;align-items:center;padding:8px;border-radius:10px;background:linear-gradient(180deg,#fbfdff,#fff);border:1px solid #eef2ff}
+.filter-control{display:flex;gap:8px;align-items:center}
+.filter-control label{font-size:13px;color:var(--muted);margin-right:6px}
+
+/* Make filter bar responsive: allow wrapping and internal horizontal scroll on small screens
+   so action buttons remain visible inside the bar instead of overflowing the card. */
+.filter-bar{flex-wrap:nowrap;min-width:0;overflow-x:auto;-webkit-overflow-scrolling:touch}
+.filter-bar .filter-control{flex:0 0 auto;min-width:120px}
+.filter-bar .report-actions{flex:0 0 auto;display:flex;gap:8px;align-items:center}
+@media(max-width:420px){
+  .filter-bar{padding-bottom:10px}
+  .filter-bar .filter-control{min-width:120px}
+  .filter-bar .report-actions button{padding:8px 10px;height:auto}
+}
+
+/* Calendar wrapper */
+.calendar-wrapper{padding:8px;border-radius:12px;border:1px solid rgba(16,24,40,0.03);background:linear-gradient(180deg,#fff,#fbfdff);box-shadow:0 8px 20px rgba(2,6,23,0.04)}
+.calendar-wrapper h4{margin:0 0 8px 0}
+
+/* Tighter table and button spacing for report area */
+.report-actions{display:flex;gap:8px;align-items:center}
+.report-actions button{padding:8px 10px;border-radius:8px}
+
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+input,select,textarea{width:100%;padding:12px;margin:10px 0;border:1px solid #e6eef8;border-radius:10px;background:#fff;font-size:14px}
+
+/* Ensure form controls size correctly within their container to avoid overflow */
+input, select, textarea, .inline-form input, .inline-form select, .inline-form textarea {
+  box-sizing: border-box;
+  max-width: 100%;
+}
+
+/* Inline form helper: keep several inputs and a button on one row when space permits */
+.inline-form{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.inline-form input,.inline-form select,.inline-form textarea{width:auto;min-width:160px;flex:1 1 auto;margin:0}
+.inline-form button{flex:0 0 auto;white-space:nowrap}
+@media(max-width:420px){
+  .inline-form{flex-direction:column;align-items:stretch}
+  .inline-form input,.inline-form select,.inline-form textarea{width:100%;min-width:0}
+}
+
+button{background:var(--primary);color:#fff;border:none;padding:10px 14px;border-radius:10px;cursor:pointer;font-weight:600;transition:all .16s ease}
+button:hover{transform:translateY(-1px);box-shadow:0 8px 20px rgba(31,111,235,0.12)}
+.btn-secondary{background:#f1f7ff;color:var(--primary);border:1px solid #dbeafe}
 button[disabled]{opacity:0.6;cursor:not-allowed}
-.btn-success{background:#10b981}
-.btn-warning{background:#f59e0b}
-.btn-danger{background:#ef4444}
+.btn-success{background:var(--success)}
+.btn-warning{background:var(--warning)}
+.btn-danger{background:var(--danger)}
+
+.tab{background:transparent;border:1px solid transparent;padding:8px 12px;border-radius:10px;cursor:pointer;color:var(--muted)}
+.tab-active{background:linear-gradient(90deg,var(--primary),var(--primary-600));color:#fff;border-radius:10px;padding:8px 12px}
+
 .badge{display:inline-block;padding:6px 10px;border-radius:999px;font-size:13px;color:#fff}
 .badge.Abierto{background:#6b7280}
-.badge.En-Proceso{background:#2563eb}
+.badge.En-Proceso{background:var(--primary)}
 .badge.En-Espera{background:#f97316}
-.badge.Resuelto{background:#10b981}
-.badge.Escalado-a-Servidor-Externo{background:#ef4444}
+.badge.Resuelto{background:var(--success)}
+.badge.Escalado-a-Servidor-Externo{background:var(--danger)}
 
 /* Toast notifications */
 .toast-container{position:fixed;right:18px;bottom:18px;z-index:9999;display:flex;flex-direction:column;gap:8px}
-.toast{background:#111;color:#fff;padding:10px 14px;border-radius:8px;box-shadow:0 8px 24px rgba(2,6,23,0.2);min-width:220px}
-.toast.success{background:#10b981}
-.toast.error{background:#ef4444}
-.toast.info{background:#2563eb}
+.toast{background:#0b1220;color:#fff;padding:12px 16px;border-radius:12px;box-shadow:0 12px 40px rgba(2,6,23,0.12);min-width:260px}
+.toast.success{background:var(--success)}
+.toast.error{background:var(--danger)}
+.toast.info{background:var(--primary)}
 
 /* Historial panel */
-.historial-list{background:#f8fafc;border:1px solid #e6eef8;padding:8px;border-radius:8px;margin-top:8px}
-.historial-item{padding:8px;border-bottom:1px dashed #e6eef8}
+.historial-list{background:#f8fafc;border:1px solid #eef2ff;padding:12px;border-radius:10px;margin-top:10px}
+.historial-item{padding:10px;border-bottom:1px dashed #eef2ff}
 .historial-item:last-child{border-bottom:none}
-table{width:100%;border-collapse:collapse;margin-top:12px;background:#fff;border-radius:8px;overflow:hidden}
-th,td{padding:10px;border-bottom:1px solid #f1f5f9;text-align:left}
-th{background:linear-gradient(90deg,var(--primary),#1e40af);color:#fff;font-weight:600}
+
+table{width:100%;border-collapse:collapse;margin-top:14px;background:linear-gradient(180deg,#fff,#fbfdff);border-radius:12px;overflow:hidden;box-shadow:0 10px 30px rgba(2,6,23,0.04)}
+th,td{padding:12px;border-bottom:1px solid #f1f5f9;text-align:left;vertical-align:middle}
+th{background:linear-gradient(90deg,var(--primary),var(--primary-600));color:#fff;font-weight:700;text-transform:uppercase;font-size:13px}
+tbody tr:nth-child(even){background:rgba(15,23,42,0.02)}
 .actions button{margin-right:8px}
-.small{font-size:12px;color:var(--muted)}
+.small{font-size:13px;color:var(--muted)}
+
+/* Report cards */
+.report-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:16px}
+.report-card{background:linear-gradient(180deg,#ffffff,#fbfdff);padding:16px;border-radius:12px;border:1px solid rgba(16,24,40,0.03);box-shadow:0 8px 24px rgba(2,6,23,0.04)}
+.report-card h4{margin:0 0 8px 0}
+.chart-legend{display:flex;flex-wrap:wrap;gap:10px;margin-top:10px}
+.chart-legend .item{display:flex;gap:8px;align-items:center}
+.legend-color{width:12px;height:12px;border-radius:3px}
+
+/* Summary cards row (top of reports): make horizontally scrollable on narrow screens
+   and prevent cards from shrinking below a usable width. */
+.summary-row{display:flex;gap:12px;margin-bottom:12px;overflow-x:auto;padding-bottom:6px;-webkit-overflow-scrolling:touch}
+.summary-row .card{flex:0 0 auto;min-width:160px;max-width:320px}
+.summary-row .card > div{height:auto}
+@media(min-width:768px){
+  .summary-row .card{flex:1 1 0}
+}
+
+/* Hamburger menu */
+.hamburger{background:transparent;border:1px solid rgba(2,6,23,0.04);padding:8px;border-radius:8px;cursor:pointer}
+
+@media(max-width:1024px){
+  .report-grid{grid-template-columns:1fr}
+  .form-row{grid-template-columns:1fr}
+}
 
 @media(max-width:768px){
-  .container{padding:8px}
-  .card{padding:12px}
-  .form-row{grid-template-columns:1fr}
-  table, thead, tbody, th, td, tr{display:block}
-  thead{display:none}
-  tr{margin-bottom:12px}
-  td{border:none;padding:6px}
-  td:before{content:attr(data-label);font-weight:bold;display:block}
+  .container{padding:10px}
+  .card{padding:14px}
+
+  .super-table-wrap,
+  .spreadsheetTableRoot,
+  .admin-scroll-shell{overflow-x:auto;-webkit-overflow-scrolling:touch;display:block}
+
+  .super-table,
+  .fixedTable,
+  .admin-scroll-shell table,
+  .escalados-admin-table{
+    display: table !important;
+    width: 100%;
+    min-width: 900px;
+    border-collapse: collapse;
+    table-layout: auto;
+    box-shadow: none;
+    writing-mode: horizontal-tb !important;
+    text-orientation: mixed !important;
+    transform: none !important;
+  }
+
+  .super-table thead,
+  .fixedTable thead,
+  .admin-scroll-shell thead,
+  .escalados-admin-table thead{display:table-header-group !important}
+  .super-table tbody,
+  .fixedTable tbody,
+  .admin-scroll-shell tbody,
+  .escalados-admin-table tbody{display:table-row-group !important}
+  .super-table tr,
+  .fixedTable tr,
+  .admin-scroll-shell tr,
+  .escalados-admin-table tr{display:table-row !important}
+  .super-table th,
+  .super-table td,
+  .fixedTable th,
+  .fixedTable td,
+  .admin-scroll-shell th,
+  .admin-scroll-shell td,
+  .escalados-admin-table th,
+  .escalados-admin-table td{
+    display:table-cell !important;
+    border:none;
+    padding:8px;
+    vertical-align:top;
+    white-space:normal !important;
+    writing-mode: horizontal-tb !important;
+    text-orientation: mixed !important;
+    transform:none !important;
+    letter-spacing: normal !important;
+    text-transform: none !important;
+  }
+  .super-table th,
+  .fixedTable th,
+  .admin-scroll-shell th,
+  .escalados-admin-table th{background:#f3f4f6;color:#111;font-size:12px;text-transform:none}
+  .super-table td:before,
+  .fixedTable td:before,
+  .admin-scroll-shell td:before,
+  .escalados-admin-table td:before{content:none}
+
+  /* Do not convert every table in the app to stacked cards; this breaks real data tables. */
+  .mobile-list-table{display:block}
+  .mobile-list-table thead{display:none}
+  .mobile-list-table tr{margin-bottom:12px;display:block}
+  .mobile-list-table td{display:block;border:none;padding:8px}
+  .mobile-list-table td:before{content:attr(data-label);font-weight:600;display:block;margin-bottom:6px}
 }
-@media(max-width:768px){body{padding:12px}}
+
+/* Mobile improvements: keep inline forms in a single horizontal row where possible,
+   make report cards horizontally scrollable instead of forcing vertical stacking,
+   and ensure escalados table text remains horizontal on narrow viewports. */
+@media (min-width:421px) {
+  .inline-form{flex-wrap:nowrap}
+  .inline-form > *{flex:0 0 auto}
+  .inline-form input,.inline-form select,.inline-form textarea{min-width:140px}
+}
+
+@media (max-width:768px) {
+  .report-grid{display:flex;flex-wrap:nowrap;overflow-x:auto;gap:12px;padding-bottom:6px}
+  .report-card{min-width:260px;flex:0 0 auto}
+
+  /* Ensure report cards and the table are visually separated and each can scroll horizontally */
+  .report-grid{margin-bottom:12px}
+  .admin-scroll-shell{display:block;clear:both;width:100%;overflow-x:auto}
+
+  /* Strong override for escalados table to avoid any rotated/vertical text */
+/* Shell to isolate report grid scrolling from the rest of the card */
+.report-grid-shell{overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:12px;margin-bottom:12px}
+.report-grid-shell .report-grid{display:flex;gap:12px}
+
+.admin-scroll-shell{margin-top:8px}
+
+  /* Admin subtabs: keep horizontal, allow scroll on small screens */
+  .admin-subtabs{display:flex;gap:8px;align-items:center;flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch}
+  .admin-subtabs .tab, .admin-subtabs .tab-active{flex:0 0 auto;white-space:nowrap}
+  .admin-subtabs::-webkit-scrollbar{height:8px}
+  .admin-subtabs::-webkit-scrollbar-thumb{background:rgba(0,0,0,0.12);border-radius:6px}
+
+  /* Usuarios: evitar que el inline form colapse en móvil; permitir scroll horizontal */
+  .users-inline-form{display:flex;gap:8px;align-items:center;flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch}
+  .users-inline-form > input, .users-inline-form > select, .users-inline-form > button{flex:0 0 auto;min-width:140px}
+  .users-inline-form > button{white-space:nowrap}
+
+/* Reports shell layout */
+.reports-shell{display:grid;grid-template-columns:1fr;gap:12px}
+.reports-charts-shell{overflow:hidden}
+.reports-table-shell{overflow:hidden}
+@media(max-width:768px){
+  .reports-charts-shell{overflow-x:auto}
+  .reports-table-shell{overflow-x:auto}
+}
+
+/* Evitar que los encabezados de la tabla "escalados" se muestren verticales */
+.escalados-admin-table th,
+.escalados-admin-table td {
+  white-space: nowrap !important;
+  word-break: normal !important;
+  min-width: 88px !important;
+}
+.escalados-admin-table th { font-weight:600 }
+.escalados-admin-table td strong { display:inline-block }
+  .escalados-admin-table, .escalados-admin-table *{
+    writing-mode: horizontal-tb !important;
+    text-orientation: mixed !important;
+    transform: none !important;
+  }
+  .escalados-admin-table th, .escalados-admin-table td{
+    white-space: normal !important;
+    display:table-cell !important;
+  }
+}
+
+/* Final override: asegurar encabezados y celdas horizontales dentro de shells con scroll
+   Uso de selector con mayor especificidad y colocado al final para vencer reglas anteriores */
+.admin-scroll-shell .escalados-admin-table th,
+.admin-scroll-shell .escalados-admin-table td,
+.admin-scroll-shell th,
+.admin-scroll-shell td {
+  white-space: nowrap !important;
+  writing-mode: horizontal-tb !important;
+  text-orientation: mixed !important;
+  word-break: normal !important;
+  min-width: 72px !important;
+}
+
+/* Fix: evitar que pequeños bloques dentro de una tarjeta .card (p.ej. Áreas / Maquinarias)
+   colapsen en vistas estrechas. Forzar que el contenedor interno ocupe el 100% y que
+   el inline-form no reduzca su alto ni hide inputs. Aplicar con especificidad alta
+   para no afectar otras tarjetas. */
+.card > div > .inline-form, .card > div > ul {
+  width: 100% !important;
+  box-sizing: border-box !important;
+}
+.card > div > .inline-form { display: flex !important; gap: 8px !important; align-items: center !important; flex-wrap: wrap !important; }
+.card > div > .inline-form > input, .card > div > .inline-form > select { min-width: 120px !important; flex: 1 1 auto !important; }
+.card > div > .inline-form > button { flex: 0 0 auto !important; white-space: nowrap !important; }
+
+/* Forzar que se muestren como bloques verticales en pantallas muy pequeñas, pero sin colapsar */
+@media(max-width:420px){
+  .card > div > .inline-form{flex-direction:column;align-items:stretch}
+  .card > div > .inline-form > input, .card > div > .inline-form > select{width:100%;min-width:0}
+}
+
+/* Additional protections: ensure inner card sections don't collapse and inputs keep usable height */
+.card > div { width: 100% !important; box-sizing: border-box !important; min-height: 120px !important; }
+.card { overflow: visible; }
+.card > div > ul { margin-top: 8px !important; padding-left: 20px !important; }
+.card > div > .inline-form { display: flex !important; gap: 8px !important; align-items: center !important; flex-wrap: wrap !important; }
+.card > div > .inline-form > input, .card > div > .inline-form > select, .card > div > .inline-form > textarea { min-width: 120px !important; flex: 1 1 auto !important; height: 40px !important; line-height: 20px !important; }
+.card > div > .inline-form > button { align-self: center !important; }
+
+@media(max-width:480px){
+  .card > div { min-height: 100px !important; }
+  .card > div > .inline-form > input, .card > div > .inline-form > select { height: 44px !important; }
+}
+

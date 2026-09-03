@@ -4,6 +4,7 @@ import Link from 'next/link'
 import '../styles/global.css'
 import { SpeedInsights } from '@vercel/speed-insights/next'
 import ToastProvider from '../components/ToastProvider'
+import DialogProvider from '../components/DialogProvider'
 
 function Layout({ children }){
   const { data: session } = useSession();
@@ -37,11 +38,13 @@ export default function App({ Component, pageProps: { session, ...pageProps }}){
     <SessionProvider session={session}>
       {showSpeed && <SpeedInsights />}
       <ToastProvider>
-        <Layout>
-          <div style={{padding:'18px 0'}}>
-            <Component {...pageProps} />
-          </div>
-        </Layout>
+        <DialogProvider>
+          <Layout>
+            <div style={{padding:'18px 0'}}>
+              <Component {...pageProps} />
+            </div>
+          </Layout>
+        </DialogProvider>
       </ToastProvider>
     </SessionProvider>
   )

@@ -1,11 +1,11 @@
-const db = require('../../../../lib/db');
+const db = require('../../../lib/db');
 const bcrypt = require('bcryptjs');
 
 async function handler(req, res){
   const { id } = req.query || {};
   if(!id) return res.status(400).json({ error: 'User id requerido' });
 
-  const { getUserFromReq, requireRole } = require('../../../../lib/auth');
+  const { getUserFromReq, requireRole } = require('../../../lib/auth');
   const user = await getUserFromReq(req);
   if(!requireRole(user, ['admin'])) return res.status(403).json({ error: 'No autorizado' });
 

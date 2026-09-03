@@ -14,6 +14,12 @@ async function handler(req, res) {
     const fields = [];
     const vals = [];
     let idx = 1;
+    // obtener ticket actual para aplicar reglas de negocio y respetar marcas de tiempo existentes
+    const cur = await db.query('SELECT estado, fecha_en_proceso, fecha_en_espera, fecha_resuelto FROM tickets WHERE id=$1', [id]);
+    const curRow = cur.rows[0] || {};
+    const curEstado = curRow && curRow.estado ? String(curRow.estado).toLowerCase() : '';
+    if (curEstado === 'resuelto') return res.status(403).json({ error: 'No se permiten modificaciones: el tique ya está Resuelto' });
+    if (curEstado.includes('escalad')) return res.status(403).json({ error: 'No se permiten modificaciones: el tique fue escalado a servidor externo' });
     if (data.area) { fields.push(`area=$${idx++}`); vals.push(data.area); }
     if (data.maquina) { fields.push(`maquina=$${idx++}`); vals.push(data.maquina); }
     if (data.descripcion) { fields.push(`descripcion=$${idx++}`); vals.push(data.descripcion); }
@@ -22,17 +28,18 @@ async function handler(req, res) {
     if (data.nota) { fields.push(`nota=$${idx++}`); vals.push(data.nota); }
     if (!fields.length) return res.status(400).json({ error: 'Nada para actualizar' });
 
-    // require authentication for updates
+    // requerir autenticación para actualizaciones
     const { getUserFromReq, requireRole } = require('../../../lib/auth');
     const user = await getUserFromReq(req);
     if (!user) return res.status(403).json({ error: 'No autorizado' });
 
-    // If estado includes status that warrants a timestamp, add corresponding timestamp assignments
+    // Si `estado` incluye un estado que requiere una marca de tiempo, añadir las asignaciones correspondientess
     if (data.estado) {
       const s = String(data.estado).toLowerCase();
-      if (s === 'en proceso') fields.push('fecha_en_proceso=now()');
-      if (s === 'en espera') fields.push('fecha_en_espera=now()');
-      if (s === 'resuelto') fields.push('fecha_resuelto=now()');
+      // solo establecer la marca de tiempo la primera vez que el ticket entra en ese estado (evitar sobreescribir marcas existentes)
+      if (s === 'en proceso' && !curRow.fecha_en_proceso) fields.push('fecha_en_proceso=now()');
+      if (s === 'en espera' && !curRow.fecha_en_espera) fields.push('fecha_en_espera=now()');
+      if (s === 'resuelto' && !curRow.fecha_resuelto) fields.push('fecha_resuelto=now()');
       if (s === 'escalado a servidor externo') fields.push('fecha_escalado=now()');
     }
 

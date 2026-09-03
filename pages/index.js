@@ -22,12 +22,12 @@ export default function Home(){
   useEffect(()=>{ loadCatalogs() }, []);
 
   useEffect(()=>{
-    // if logged in, redirect to role-specific dashboard
+    // si está autenticado, redirigir al panel específico según rol
     if(session){
       const role = ((session.user?.role || session.user?.rol || '') + '').toString().toLowerCase();
-      if(role === 'admin') return router.replace('/admin');
-      if(role === 'tecnico') return router.replace('/tecnico');
-      return router.replace('/empleado');
+      if(role === 'admin') { router.replace('/admin'); return; }
+      if(role === 'tecnico') { router.replace('/tecnico'); return; }
+      router.replace('/empleado');
     }
   }, [session]);
 
@@ -39,7 +39,7 @@ export default function Home(){
     if(!password) return showToast('Ingresa contraseña', 'error');
     const res = await signIn('credentials', { redirect: false, email, password });
     if(res?.error) return showToast(res.error || 'Error de autenticación', 'error');
-    // redirect based on role without full reload
+    // redirigir según rol sin recarga completa
     const session = await getSession();
     const role = ((session?.user?.role || session?.user?.rol || '') + '').toString().toLowerCase();
     if(role === 'admin') return router.replace('/admin');
@@ -122,8 +122,8 @@ export default function Home(){
 
       <div className="card" style={{marginTop:12}}>
         <h3>Lista de Tiques</h3>
-        <div style={{overflowX:'auto'}}>
-          <table style={{width:'100%',borderCollapse:'collapse'}}>
+        <div className="spreadsheetTableRoot" style={{overflowX:'auto'}}>
+          <table className="fixedTable" style={{width:'100%',borderCollapse:'collapse',minWidth:800}}>
             <thead style={{background:'#2563eb',color:'#fff'}}>
               <tr><th>ID</th><th>Fecha</th><th>Solicitante</th><th>Area</th><th>Máquina</th><th>Fallo</th><th>Urgencia</th><th>Estado</th></tr>
             </thead>

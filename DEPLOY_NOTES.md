@@ -51,6 +51,3 @@ git commit -m "feat: migración GAS → Next.js; auth, APIs, admin UI, historial
 git push origin main
 ```
 
-Si quieres, puedo:
-- Crear el commit local y preparar un `git push` (requiere que confirmes y que tengas git configurado en tu entorno).
-- Preparar un `README.md` final y un checklist de verificación para despliegue en Vercel.

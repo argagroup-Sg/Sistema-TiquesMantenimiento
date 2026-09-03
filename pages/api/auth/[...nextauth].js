@@ -45,6 +45,19 @@ const options = {
       session.user.nombre = token.nombre || session.user.name
       return session
     }
+    ,
+    async redirect({ url, baseUrl }){
+      // Ensure signOut and other redirects land on the app login page
+      try{
+        if(!url) return baseUrl
+        // If it's a relative path, keep it within app
+        // Return relative URLs as-is so the browser stays on the current origin
+        if(url.startsWith('/')) return url
+        const to = new URL(url)
+        if(to.origin === baseUrl) return url
+      }catch(e){ /* fallthrough */ }
+      return baseUrl + '/auth/login'
+    }
   },
   secret: process.env.NEXTAUTH_SECRET || process.env.JWT_SECRET || 'dev-secret-replace'
 }
