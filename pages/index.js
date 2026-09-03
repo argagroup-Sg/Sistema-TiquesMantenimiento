@@ -43,6 +43,7 @@ export default function Home(){
     const session = await getSession();
     const role = ((session?.user?.role || session?.user?.rol || '') + '').toString().toLowerCase();
     if(role === 'admin') return router.replace('/admin');
+    if(role === 'super') return router.replace('/super');
     if(role === 'tecnico') return router.replace('/tecnico');
     return router.replace('/empleado');
   }
