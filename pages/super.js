@@ -115,7 +115,7 @@ export default function SuperDashboard(){
               <div style={{padding:12,border:'1px solid #eee',borderRadius:6}}><strong>Tiques:</strong> {tickets.length}</div>
               <div style={{padding:12,border:'1px solid #eee',borderRadius:6}}><strong>Escalados:</strong> {escalados.length}</div>
             </div>
-            <p style={{marginTop:12}}>Pantalla de resumen creada — me dirás qué gráficos quieres implementar.</p>
+            <p style={{marginTop:12}}>Pantalla de resumen.</p>
           </div>
         )}
 
