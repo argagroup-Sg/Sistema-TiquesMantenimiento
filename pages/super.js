@@ -75,7 +75,7 @@ export default function SuperDashboard(){
         ) : (
           <div style={{width:24}} />
         )}
-        <h2 style={{margin:0}}>Panel (Super) — Vista solo lectura</h2>
+        <h2 style={{margin:0}}>Panel (Super) — Vista </h2>
         <div style={{width:36}} />
       </div>
 

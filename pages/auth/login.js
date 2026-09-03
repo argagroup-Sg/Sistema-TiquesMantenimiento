@@ -33,7 +33,7 @@ export default function Login(){
       <h2>Iniciar sesión</h2>
       <form onSubmit={handleSubmit}>
         <label>Email</label>
-        <input value={email} onChange={e=>setEmail(e.target.value)} type="email" />
+        <input value={email} onChange={e=>setEmail(e.target.value)} type="text" />
         <label>Contraseña</label>
         <input value={password} onChange={e=>setPassword(e.target.value)} type="password" />
         <div style={{marginTop:12}}>

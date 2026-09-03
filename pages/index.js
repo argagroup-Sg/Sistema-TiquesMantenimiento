@@ -26,6 +26,7 @@ export default function Home(){
     if(session){
       const role = ((session.user?.role || session.user?.rol || '') + '').toString().toLowerCase();
       if(role === 'admin') { router.replace('/admin'); return; }
+      if(role === 'super') { router.replace('/super'); return; }
       if(role === 'tecnico') { router.replace('/tecnico'); return; }
       router.replace('/empleado');
     }
@@ -73,7 +74,7 @@ export default function Home(){
           </div>
           <form onSubmit={handleSignIn} style={{marginTop:18}}>
             <div className="form-row">
-              <input type="email" placeholder="correo@empresa.com" value={email} onChange={e=>setEmail(e.target.value)} />
+              <input type="text" placeholder="correo@empresa.com" value={email} onChange={e=>setEmail(e.target.value)} />
               <input type="password" placeholder="Contraseña" value={password} onChange={e=>setPassword(e.target.value)} />
             </div>
             <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginTop:8}}>
