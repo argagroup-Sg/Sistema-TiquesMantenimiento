@@ -16,10 +16,6 @@ jobs:
         with:
           node-version: '20'
       - name: Install dependencies
-        run: |
-          cd next-app
-          npm ci
+        run: npm ci
       - name: Run tests
-        run: |
-          cd next-app
-          npm test
+        run: npm test
