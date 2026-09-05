@@ -68,7 +68,28 @@ export default function Home(){
       <div className="container" style={{maxWidth:520,margin:'60px auto'}}>
         <div className="card" style={{textAlign:'center'}}>
           <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:12}}>
-            <div style={{width:80,height:80,borderRadius:12,background:'linear-gradient(135deg,#2563eb,#7c3aed)',display:'flex',alignItems:'center',justifyContent:'center',color:'#fff',fontWeight:700,fontSize:24}}>SM</div>
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '10px',
+              background: '#ffffff', // Fondo blanco para que resalte el logo perfectamente
+              borderRadius: '12px',
+              width: 'fit-content'
+            }}>
+              <img
+                src="https://exportgagroup.com/wp-content/uploads/2023/02/350x100-logo-pag-hori-e1745438808154.png"
+                alt="Exportgagroup Prawn Exporter Logo"
+                style={{
+                  width: '100%',
+                  maxWidth: '350px', // Mantiene la resolución óptima original de tu imagen
+                  height: 'auto',
+                  objectFit: 'contain'
+                }}
+              />
+            </div>
+
+{/*         <div style={{width:80,height:80,borderRadius:12,background:'linear-gradient(135deg,#2563eb,#7c3aed)',display:'flex',alignItems:'center',justifyContent:'center',color:'#fff',fontWeight:700,fontSize:24}}>SM</div> */}            
             <h2 style={{margin:0}}>Sistema de Mantenimiento</h2>
             <p style={{margin:0,color:'#6b7280'}}>Inicia sesión con tu cuenta de empresa</p>
           </div>
