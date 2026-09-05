@@ -30,6 +30,26 @@ export default function Login(){
 
   return (
     <div style={{maxWidth:420,margin:'40px auto'}}>
+      <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '10px',
+              background: '#ffffff', // Fondo blanco para que resalte el logo perfectamente
+              borderRadius: '12px',
+              width: 'fit-content'
+            }}>
+              <img
+                src="https://exportgagroup.com/wp-content/uploads/2023/02/350x100-logo-pag-hori-e1745438808154.png"
+                alt="Exportgagroup Prawn Exporter Logo"
+                style={{
+                  width: '100%',
+                  maxWidth: '350px', // Mantiene la resolución óptima original de tu imagen
+                  height: 'auto',
+                  objectFit: 'contain'
+                }}
+              />
+            </div>
       <h2>Iniciar sesión</h2>
       <form onSubmit={handleSubmit}>
         <label>Email</label>
