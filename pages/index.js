@@ -82,7 +82,7 @@ export default function Home(){
                 alt="Exportgagroup Prawn Exporter Logo"
                 style={{
                   width: '100%',
-                  maxWidth: '350px', // Mantiene la resolución óptima original de tu imagen
+                  maxWidth: '350px', // Mantiene la resolución óptima original
                   height: 'auto',
                   objectFit: 'contain'
                 }}

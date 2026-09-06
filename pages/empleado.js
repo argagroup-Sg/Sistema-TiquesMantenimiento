@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { useSession } from 'next-auth/react'
 import { api } from '../lib/api'
-import { useToast } from '../components/ToastProvider'
 
 export default function Empleado(){
   const { data: session } = useSession();
@@ -11,18 +10,16 @@ export default function Empleado(){
   const [maquinas, setMaquinas] = useState([]);
   const [error, setError] = useState('');
 
-  const showToast = useToast()
-
   async function enviar(e){
     e && e.preventDefault();
     if(!form.solicitante || !form.area || !form.maquina || !form.descripcion){ setError('Completa todos los campos.'); return }
     try{
       setLoading(true);
       const r = await api('/tickets', { method:'POST', body: JSON.stringify(form) });
-      if (showToast) showToast('Tique creado: ' + r.id, 'success')
+      alert('Tique creado: ' + r.id);
       setForm({ solicitante:'', area:'', maquina:'', urgencia:'Baja', descripcion:'' });
     }catch(err){
-      if (showToast) showToast(err.message || 'Error', 'error')
+      alert(err.message || 'Error');
     }finally{ setLoading(false); }
   }
 
@@ -35,13 +32,13 @@ export default function Empleado(){
     <div className="container"><div className="card"><h3>Debes iniciar sesión</h3></div></div>
   )
 
-  const rol = ((session?.user?.rol || session?.user?.role || '') + '').toString().toLowerCase();
-  if(!['empleado','tecnico','admin'].includes(rol)) return <div className="container"><div className="card"><h3>Acceso restringido</h3><p>Tu cuenta no tiene permiso para crear tiques.</p></div></div>
+  const rol = session?.user?.rol || session?.user?.role || '';
+  if(!['empleado','admin','tecnico'].includes(rol)) return <div className="container"><div className="card"><h3>Acceso restringido</h3><p>Tu cuenta no tiene permiso para crear tiques.</p></div></div>
 
   return (
     <div className="container">
       <div className="card">
-        <h2>Reportar Falla</h2>
+        <h2>Reportar Falla EA</h2>
         <form onSubmit={enviar}>
           <label>Tu nombre</label>
           <input value={form.solicitante} onChange={e=>setForm({...form,solicitante:e.target.value})} />
