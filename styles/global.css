@@ -316,3 +316,48 @@ tbody tr:nth-child(even){background:rgba(15,23,42,0.02)}
   .card > div > .inline-form > input, .card > div > .inline-form > select { height: 44px !important; }
 }
 
+/* 1. Estilo base para todos los estados (badges) */
+.badge {
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  display: inline-block;
+  text-align: center;
+  text-transform: capitalize; /* Hace que la primera letra salga en mayúscula */
+}
+
+/* 2. Colores personalizados según el estado que devuelva statusClass */
+
+/* Estado: Abierto / Pendiente */
+.badge.abierto, 
+.badge.pendiente {
+  background-color: #e0f2fe; /* Azul claro */
+  color: #0369a1;            /* Texto azul oscuro */
+  border: 1px solid #bae6fd;
+}
+
+/* Estado: En Proceso / Revisión */
+.badge.en-proceso, 
+.badge.proceso {
+  background-color: #fef3c7; /* Amarillo claro */
+  color: #b45309;            /* Texto marrón/dorado */
+  border: 1px solid #fde68a;
+}
+
+/* Estado: Parada de Planta / Urgente */
+.badge.parada-de-planta, 
+.badge.alta {
+  background-color: #fee2e2; /* Rojo claro */
+  color: #b91c1c;            /* Texto rojo oscuro */
+  border: 1px solid #fca5a5;
+}
+
+/* Estado: Resuelto / Terminado / Cerrado */
+.badge.resuelto, 
+.badge.cerrado, 
+.badge.terminado {
+  background-color: #d1fae5; /* Verde claro */
+  color: #047857;            /* Texto verde oscuro */
+  border: 1px solid #a7f3d0;
+}

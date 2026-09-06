@@ -88,8 +88,11 @@ export default function Empleado(){
         <h2>Reportar Falla EA</h2>
         <form onSubmit={enviar}>
           <label>Tu nombre</label>
-          <input value={form.solicitante} onChange={e=>setForm({...form,solicitante:e.target.value})} />
-          
+          <input 
+            value={form.solicitante} 
+            readOnly 
+            style={{ backgroundColor: '#f3f4f6', cursor: 'not-allowed', color: '#6b7280' }} 
+          />          
           <label>Área</label>
           <select value={form.area} onChange={e=>setForm({...form,area:e.target.value})}><option value="">Seleccione</option>{areas.map(a=> <option key={a.id} value={a.nombre}>{a.nombre}</option>)}</select>
           
