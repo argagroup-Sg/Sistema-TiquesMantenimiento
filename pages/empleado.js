@@ -2,6 +2,20 @@ import React, { useState, useEffect } from 'react'
 import { useSession } from 'next-auth/react'
 import { api } from '../lib/api'
 
+// Funciones auxiliares para que la tabla no dé error si no las tienes importadas
+const formatDate = (dateStr) => {
+  if (!dateStr) return '';
+  try {
+    const d = new Date(dateStr);
+    return isNaN(d.getTime()) ? dateStr : d.toLocaleDateString();
+  } catch (e) { return dateStr; }
+};
+
+const statusClass = (estado) => {
+  if (!estado) return 'abierto';
+  return estado.toString().toLowerCase().replace(/\s+/g, '-');
+};
+
 export default function Empleado(){
   const { data: session } = useSession();
   const [form, setForm] = useState({ solicitante:'', area:'', maquina:'', urgencia:'Baja', descripcion:'' });
@@ -9,8 +23,22 @@ export default function Empleado(){
   const [areas, setAreas] = useState([]);
   const [maquinas, setMaquinas] = useState([]);
   const [tiques, setTiques] = useState([]);
-
   const [error, setError] = useState('');
+
+  // 1. Auto-rellenar el solicitante con el nombre de la sesión activa en cuanto cargue
+  useEffect(() => {
+    if (session?.user?.name) {
+      setForm(prevForm => ({
+        ...prevForm,
+        solicitante: session.user.name.toString().trim()
+      }));
+    } else if (session?.user?.email) {
+      setForm(prevForm => ({
+        ...prevForm,
+        solicitante: session.user.email.split('@')[0]
+      }));
+    }
+  }, [session]);
 
   async function enviar(e){
     e && e.preventDefault();
@@ -19,7 +47,17 @@ export default function Empleado(){
       setLoading(true);
       const r = await api('/tickets', { method:'POST', body: JSON.stringify(form) });
       alert('Tique creado: ' + r.id);
-      setForm({ solicitante:'', area:'', maquina:'', urgencia:'Baja', descripcion:'' });
+      
+      // 2. Al limpiar el formulario, conservamos el nombre del usuario logueado en vez de borrarlo
+      setForm({ 
+        solicitante: session?.user?.name || form.solicitante, 
+        area:'', 
+        maquina:'', 
+        urgencia:'Baja', 
+        descripcion:'' 
+      });
+      setError('');
+      loadCatalogs(); // Recarga la lista de tiques para mostrar el recién creado
     }catch(err){
       alert(err.message || 'Error');
     }finally{ setLoading(false); }
@@ -27,14 +65,21 @@ export default function Empleado(){
 
   useEffect(()=>{ loadCatalogs(); }, []);
   async function loadCatalogs(){
-    try{ const a = await api('/areas'); setAreas(a.areas || []); const m = await api('/maquinas'); setMaquinas(m.maquinas || []);     const t = await api('/tickets'); setTiques(t.tiques||[]);}catch(err){ console.error(err); }
+    try{ 
+      const a = await api('/areas'); setAreas(a.areas || []); 
+      const m = await api('/maquinas'); setMaquinas(m.maquinas || []);     
+      const t = await api('/tickets'); setTiques(t.tiques || []);
+    }catch(err){ 
+      console.error(err); 
+    }
   }
 
   if(!session) return (
     <div className="container"><div className="card"><h3>Debes iniciar sesión</h3></div></div>
   )
 
-  const rol = session?.user?.rol || session?.user?.role || '';
+  // Validación de rol segura e insensible a mayúsculas/minúsculas
+  const rol = ((session?.user?.rol || session?.user?.role || '') + '').toString().toLowerCase();
   if(!['empleado','admin','tecnico'].includes(rol)) return <div className="container"><div className="card"><h3>Acceso restringido</h3><p>Tu cuenta no tiene permiso para crear tiques.</p></div></div>
 
   return (
@@ -44,14 +89,19 @@ export default function Empleado(){
         <form onSubmit={enviar}>
           <label>Tu nombre</label>
           <input value={form.solicitante} onChange={e=>setForm({...form,solicitante:e.target.value})} />
+          
           <label>Área</label>
           <select value={form.area} onChange={e=>setForm({...form,area:e.target.value})}><option value="">Seleccione</option>{areas.map(a=> <option key={a.id} value={a.nombre}>{a.nombre}</option>)}</select>
+          
           <label>Máquina</label>
           <select value={form.maquina} onChange={e=>setForm({...form,maquina:e.target.value})}><option value="">Seleccione</option>{maquinas.map(m=> <option key={m.id} value={m.nombre}>{m.nombre}</option>)}</select>
+          
           <label>Urgencia</label>
           <select value={form.urgencia} onChange={e=>setForm({...form,urgencia:e.target.value})}><option>Baja</option><option>Media</option><option>Alta</option><option>Parada de Planta</option></select>
+          
           <label>Descripción</label>
           <textarea value={form.descripcion} onChange={e=>setForm({...form,descripcion:e.target.value})} rows={5}></textarea>
+          
           {error && <div style={{color:'red',marginBottom:8}}>{error}</div>}
           <button type="submit" disabled={loading}>{loading? 'Enviando...':'Enviar Tique'}</button>
         </form>
