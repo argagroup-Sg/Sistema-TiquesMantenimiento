@@ -8,6 +8,8 @@ export default function Empleado(){
   const [loading, setLoading] = useState(false);
   const [areas, setAreas] = useState([]);
   const [maquinas, setMaquinas] = useState([]);
+  const [tiques, setTiques] = useState([]);
+
   const [error, setError] = useState('');
 
   async function enviar(e){
@@ -25,7 +27,7 @@ export default function Empleado(){
 
   useEffect(()=>{ loadCatalogs(); }, []);
   async function loadCatalogs(){
-    try{ const a = await api('/areas'); setAreas(a.areas || []); const m = await api('/maquinas'); setMaquinas(m.maquinas || []); }catch(err){ console.error(err); }
+    try{ const a = await api('/areas'); setAreas(a.areas || []); const m = await api('/maquinas'); setMaquinas(m.maquinas || []);     const t = await api('/tickets'); setTiques(t.tiques||[]);}catch(err){ console.error(err); }
   }
 
   if(!session) return (
