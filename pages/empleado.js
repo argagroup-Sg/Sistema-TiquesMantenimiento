@@ -54,6 +54,32 @@ export default function Empleado(){
           <button type="submit" disabled={loading}>{loading? 'Enviando...':'Enviar Tique'}</button>
         </form>
       </div>
+      
+      <div className="card" style={{marginTop:12}}>
+        <h3>Lista de Tiques</h3>
+        <div className="spreadsheetTableRoot" style={{overflowX:'auto'}}>
+          <table className="fixedTable" style={{width:'100%',borderCollapse:'collapse',minWidth:800}}>
+            <thead style={{background:'#2563eb',color:'#fff'}}>
+              <tr><th>ID</th><th>Fecha</th><th>Solicitante</th><th>Area</th><th>Máquina</th><th>Fallo</th><th>Urgencia</th><th>Estado</th></tr>
+            </thead>
+            <tbody>
+              {tiques.length===0 && <tr><td colSpan={8}>No hay tiques.</td></tr>}
+              {tiques.map(t=>(
+                  <tr key={t.id} style={{borderBottom:'1px solid #eee'}}>
+                    <td><strong>{t.id}</strong></td>
+                    <td>{formatDate(t.fecha_creacion || t.fecha)}</td>
+                    <td>{t.solicitante}</td>
+                    <td>{t.area}</td>
+                    <td>{t.maquina}</td>
+                    <td>{t.descripcion}</td>
+                    <td>{t.urgencia}</td>
+                    <td><span className={"badge " + statusClass(t.estado)}>{t.estado || 'Abierto'}</span></td>
+                  </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
   )
 }

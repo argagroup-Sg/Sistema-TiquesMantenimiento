@@ -119,7 +119,7 @@ export default function Home(){
       </div>
 
       <div className="card" style={{marginTop:12}}>
-        <h3>Reportar Falla</h3>
+        <h3> AE Reportar Falla</h3>
         <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
           <div>
             <label>Tu nombre</label>
