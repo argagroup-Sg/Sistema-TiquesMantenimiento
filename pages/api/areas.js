@@ -27,6 +27,15 @@ async function handler(req, res) {
     }
   }
 
+  if (req.method === 'PUT') {
+    const { id, nombre } = req.body || {};
+    if (!id) return res.status(400).json({ error: 'Id es obligatorio' });
+    const n = sanitize(nombre);
+    if (!n) return res.status(400).json({ error: 'Nombre es obligatorio' });
+    await db.query('UPDATE areas SET nombre=$1 WHERE id=$2', [n, id]);
+    return res.json({ success: true });
+  }
+
   if (req.method === 'DELETE') {
     const { id } = req.query || {};
     if (!id) return res.status(400).json({ error: 'Id requerido' });

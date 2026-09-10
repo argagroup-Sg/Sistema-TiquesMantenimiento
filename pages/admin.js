@@ -115,6 +115,10 @@ export default function Admin(){
   const [editingUserForm, setEditingUserForm] = useState({ email:'', nombre:'', rol:'', password:'' });
   const [editingProveedorId, setEditingProveedorId] = useState(null);
   const [editingProveedorForm, setEditingProveedorForm] = useState({ nombre:'', contacto:'' });
+  const [editingAreaId, setEditingAreaId] = useState(null);
+  const [editingAreaForm, setEditingAreaForm] = useState({ nombre:'' });
+  const [editingMaquinaId, setEditingMaquinaId] = useState(null);
+  const [editingMaquinaForm, setEditingMaquinaForm] = useState({ nombre:'' });
 
   const [newArea, setNewArea] = useState('');
   const [newMaquina, setNewMaquina] = useState('');
@@ -142,7 +146,31 @@ export default function Admin(){
   // filtro centralizado usado por el calendario, la tabla y las exportaciones
   function getFilteredTickets({ ticketsList = tickets, view = calendarView, date = calendarDate, tecnico = calendarTecnico, onlyAvailable = calendarOnlyAvailable }){
     if(!ticketsList) return [];
-    const d = date ? new Date(date) : new Date();
+    const toCalendarDate = (value) => {
+      if(!value) return new Date();
+      if(typeof value === 'string'){
+        const trimmed = value.trim();
+        const match = trimmed.match(/^\d{4}-\d{2}-\d{2}$/);
+        if(match){
+          const [y,m,day] = trimmed.split('-').map(Number);
+          return new Date(y, m-1, day);
+        }
+      }
+      const dt = new Date(value);
+      return Number.isNaN(dt.getTime()) ? new Date() : new Date(dt.getFullYear(), dt.getMonth(), dt.getDate());
+    };
+    const toLocalDateOnly = (value) => {
+      if(!value) return null;
+      const dt = new Date(value);
+      if(Number.isNaN(dt.getTime())) return null;
+      const fmt = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Guayaquil', year: 'numeric', month: '2-digit', day: '2-digit' });
+      const parts = fmt.formatToParts(dt).reduce((acc, p) => { if(p.type !== 'literal') acc[p.type] = p.value; return acc; }, {});
+      if(parts.year && parts.month && parts.day){
+        return new Date(Number(parts.year), Number(parts.month)-1, Number(parts.day));
+      }
+      return new Date(dt.getFullYear(), dt.getMonth(), dt.getDate());
+    };
+    const d = toCalendarDate(date);
     // inicio/fin de la ventana según la vista
     let windowStart, windowEnd;
     if(view === 'day'){
@@ -161,10 +189,10 @@ export default function Admin(){
     }
 
     const result = (ticketsList||[]).filter(t=>{
-      const start = new Date(t.fecha_creacion || t.fecha || t.fechaProgramada || t.fecha_programada || t.created_at || null);
+      const start = toLocalDateOnly(t.fecha_creacion || t.fecha || t.fechaProgramada || t.fecha_programada || t.created_at || null);
       if(!start || isNaN(start)) return false;
-      const end = t.fecha_resuelto ? new Date(t.fecha_resuelto) : new Date();
-      // comprobación de solapamiento
+      const end = toLocalDateOnly(t.fecha_resuelto || t.fechaResuelto || t.fecha_resuelto || null) || new Date();
+      // comprobación de solapamiento usando la fecha local de la región
       if(end < windowStart || start > windowEnd) return false;
       // filtro de técnico: coincidir por id, email o nombre (exacto o parcial)
       if(tecnico){
@@ -401,6 +429,36 @@ export default function Admin(){
   }
 
   function cancelEditProveedor(){ setEditingProveedorId(null); setEditingProveedorForm({ nombre:'', contacto:'' }); }
+
+  function startEditArea(a){ setEditingAreaId(a.id); setEditingAreaForm({ nombre: a.nombre||'' }); }
+
+  async function saveAreaEdit(id){
+    try{
+      const payload = { id, nombre: editingAreaForm.nombre };
+      await api('/areas', { method:'PUT', body: JSON.stringify(payload) });
+      setEditingAreaId(null);
+      setEditingAreaForm({ nombre:'' });
+      await loadAll();
+      showToast('Área actualizada','success');
+    }catch(e){ showToast(e.message||String(e),'error'); }
+  }
+
+  function cancelEditArea(){ setEditingAreaId(null); setEditingAreaForm({ nombre:'' }); }
+
+  function startEditMaquina(m){ setEditingMaquinaId(m.id); setEditingMaquinaForm({ nombre: m.nombre||'' }); }
+
+  async function saveMaquinaEdit(id){
+    try{
+      const payload = { id, nombre: editingMaquinaForm.nombre };
+      await api('/maquinas', { method:'PUT', body: JSON.stringify(payload) });
+      setEditingMaquinaId(null);
+      setEditingMaquinaForm({ nombre:'' });
+      await loadAll();
+      showToast('Máquina actualizada','success');
+    }catch(e){ showToast(e.message||String(e),'error'); }
+  }
+
+  function cancelEditMaquina(){ setEditingMaquinaId(null); setEditingMaquinaForm({ nombre:'' }); }
 
   async function addUsuario(){
     if(!userForm.email || !userForm.nombre) return showToast('Email y nombre son obligatorios', 'error');
@@ -657,7 +715,43 @@ export default function Admin(){
                 <input value={newArea} onChange={e=>setNewArea(e.target.value)} placeholder="Ej. Planta 1" />
                 <button onClick={addArea} disabled={areaLoading}>{areaLoading? 'Guardando...':'Guardar Área'}</button>
               </div>
-              <ul>{areas.map(a=> <li key={a.id}>{a.nombre}</li>)}</ul>
+              <div className="spreadsheetTableRoot" style={{overflowX:'auto', marginTop:12}}>
+                <div style={{display:'table', width:'100%', minWidth:600, borderCollapse:'collapse'}}>
+                  <div style={{display:'table-header-group', background:'#f8fafc'}}>
+                    <div style={{display:'table-row'}}>
+                      <div style={{display:'table-cell', padding:8, fontWeight:600}}>ID</div>
+                      <div style={{display:'table-cell', padding:8, fontWeight:600}}>Nombre</div>
+                      <div style={{display:'table-cell', padding:8, fontWeight:600}}>Acciones</div>
+                    </div>
+                  </div>
+                  <div style={{display:'table-row-group'}}>
+                    {(areas||[]).map(a => (
+                      <div key={a.id} style={{display:'table-row', borderTop:'1px solid #f1f5f9'}}>
+                        <div style={{display:'table-cell', padding:8}}>{a.id}</div>
+                        {editingAreaId === a.id ? (
+                          <>
+                            <div style={{display:'table-cell', padding:8}}>
+                              <input value={editingAreaForm.nombre} onChange={e=> setEditingAreaForm(prev=> ({ ...prev, nombre: e.target.value }))} placeholder="Nombre" />
+                            </div>
+                            <div style={{display:'table-cell', padding:8}}>
+                              <button onClick={()=> saveAreaEdit(a.id)}>Guardar</button>
+                              <button onClick={cancelEditArea} style={{marginLeft:8}}>Cancelar</button>
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <div style={{display:'table-cell', padding:8}}>{a.nombre}</div>
+                            <div style={{display:'table-cell', padding:8}}>
+                              <button onClick={()=>startEditArea(a)}>Editar</button>
+                              <button onClick={()=>removeItem('/areas/'+a.id)} style={{marginLeft:8}}>Eliminar</button>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
             </div>
           )}
 
@@ -668,7 +762,43 @@ export default function Admin(){
                 <input value={newMaquina} onChange={e=>setNewMaquina(e.target.value)} placeholder="Ej. Compresor #3" />
                 <button onClick={addMaquina} disabled={maquinaLoading}>{maquinaLoading? 'Guardando...':'Guardar Máquina'}</button>
               </div>
-              <ul>{maquinas.map(m=> <li key={m.id}>{m.nombre}</li>)}</ul>
+              <div className="spreadsheetTableRoot" style={{overflowX:'auto', marginTop:12}}>
+                <div style={{display:'table', width:'100%', minWidth:600, borderCollapse:'collapse'}}>
+                  <div style={{display:'table-header-group', background:'#f8fafc'}}>
+                    <div style={{display:'table-row'}}>
+                      <div style={{display:'table-cell', padding:8, fontWeight:600}}>ID</div>
+                      <div style={{display:'table-cell', padding:8, fontWeight:600}}>Nombre</div>
+                      <div style={{display:'table-cell', padding:8, fontWeight:600}}>Acciones</div>
+                    </div>
+                  </div>
+                  <div style={{display:'table-row-group'}}>
+                    {(maquinas||[]).map(m => (
+                      <div key={m.id} style={{display:'table-row', borderTop:'1px solid #f1f5f9'}}>
+                        <div style={{display:'table-cell', padding:8}}>{m.id}</div>
+                        {editingMaquinaId === m.id ? (
+                          <>
+                            <div style={{display:'table-cell', padding:8}}>
+                              <input value={editingMaquinaForm.nombre} onChange={e=> setEditingMaquinaForm(prev=> ({ ...prev, nombre: e.target.value }))} placeholder="Nombre" />
+                            </div>
+                            <div style={{display:'table-cell', padding:8}}>
+                              <button onClick={()=> saveMaquinaEdit(m.id)}>Guardar</button>
+                              <button onClick={cancelEditMaquina} style={{marginLeft:8}}>Cancelar</button>
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <div style={{display:'table-cell', padding:8}}>{m.nombre}</div>
+                            <div style={{display:'table-cell', padding:8}}>
+                              <button onClick={()=>startEditMaquina(m)}>Editar</button>
+                              <button onClick={()=>removeItem('/maquinas/'+m.id)} style={{marginLeft:8}}>Eliminar</button>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
             </div>
           )}
 
@@ -935,32 +1065,6 @@ export default function Admin(){
             </div>
           </div>
           <div className="filter-bar" style={{marginBottom:12}}>
-            <div className="filter-control">
-              <label>Vista:</label>
-              <select value={calendarView} onChange={e=>setCalendarView(e.target.value)}>
-                <option value="day">Diario</option>
-                <option value="week">Semanal</option>
-                <option value="month">Mensual</option>
-                <option value="year">Anual</option>
-              </select>
-            </div>
-            <div className="filter-control">
-              <label>Fecha:</label>
-              <input type="date" value={calendarDate} onChange={e=>setCalendarDate(e.target.value)} />
-            </div>
-            <div className="filter-control">
-              <label>Técnico:</label>
-              <select value={calendarTecnico||''} onChange={e=> setCalendarTecnico(e.target.value||null)}>
-                <option value="">-- Todos --</option>
-                {tecnicos.map(tc=> <option key={tc.email||tc.id} value={tc.email||tc.id}>{tc.nombre || tc.email}</option>)}
-              </select>
-            </div>
-            <div className="filter-control">
-              <label style={{display:'flex',alignItems:'center',gap:8}}>
-                <input type="checkbox" checked={calendarOnlyAvailable} onChange={e=> setCalendarOnlyAvailable(e.target.checked)} />
-                Mostrar sólo disponibles
-              </label>
-            </div>
             <div style={{marginLeft:'auto'}} className="report-actions">
               <button onClick={()=>downloadCSV(tickets.map(t=>({ id:t.id, fecha:t.fecha_creacion||t.fecha, solicitante:t.solicitante, area:t.area, maquina:t.maquina, urgencia:t.urgencia, estado:t.estado, tecnico:t.tecnico })), 'tiques.csv')}>Exportar Tiques CSV</button>
               <button onClick={()=>downloadXLS(tickets.map(t=>({ id:t.id, fecha:t.fecha_creacion||t.fecha, solicitante:t.solicitante, area:t.area, maquina:t.maquina, urgencia:t.urgencia, estado:t.estado, tecnico:t.tecnico })), 'tiques.xls')}>Exportar Tiques XLS</button>
@@ -1093,17 +1197,14 @@ export default function Admin(){
             onlyAvailable={calendarOnlyAvailable}
             escalados={escalados}
             onEventClick={(ticket)=>{
-              // abrir modal en admin: buscar registro escalado y mostrar detalles
               const rec = (escalados||[]).find(e=> String(e.ticket_id) === String(ticket.id));
-              if(rec){
-                // usar DialogProvider o prompt/modal existente
-                // mostramos un diálogo simple con la info
-                const html = `Ticket #${ticket.id} - Escalado\nProveedor: ${rec.proveedor||''}\nResponsable: ${rec.responsable||''}\nFecha escalado: ${rec.fecha_escalado||rec.fechaEscalado||''}\nFecha resuelto (escalado): ${rec.fecha_resuelto||rec.fechaResuelto||''}\nEstado: ${rec.estado||ticket.estado||''}`;
-                // fallback a openPrompt si no hay modal especializado
-                if(typeof window !== 'undefined' && window.alert){ window.alert(html); }
-              }else{
-                if(typeof window !== 'undefined' && window.alert){ window.alert(`Ticket #${ticket.id}\nEstado: ${ticket.estado||''}`); }
-              }
+              const fechaTicket = formatDate(ticket.fecha_creacion || ticket.fecha || ticket.fechaProgramada || ticket.fecha_programada || '');
+              const fechaEscalado = rec ? formatDate(rec.fecha_escalado || rec.fechaEscalado || '') : '';
+              const fechaResuelto = rec ? formatDate(rec.fecha_resuelto || rec.fechaResuelto || '') : formatDate(ticket.fecha_resuelto || ticket.fechaResuelto || '');
+              const html = rec
+                ? `Ticket #${ticket.id} - Escalado\nProveedor: ${rec.proveedor||''}\nResponsable: ${rec.responsable||''}\nFecha ticket: ${fechaTicket}\nFecha escalado: ${fechaEscalado}\nFecha resuelto (escalado): ${fechaResuelto}\nEstado: ${rec.estado||ticket.estado||''}`
+                : `Ticket #${ticket.id}\nFecha ticket: ${fechaTicket}\nFecha resuelto: ${fechaResuelto}\nEstado: ${ticket.estado||''}`;
+              if(typeof window !== 'undefined' && window.alert){ window.alert(html); }
             }}
           />
           <div style={{marginTop:12}}>

@@ -1,9 +1,56 @@
 import React, { useMemo, useState } from 'react'
 import { formatTime, formatDate } from '../lib/format'
 
-function startOfMonth(d){ const dt = new Date(d); dt.setDate(1); dt.setHours(0,0,0,0); return dt; }
-function endOfMonth(d){ const dt = new Date(d); dt.setMonth(dt.getMonth()+1); dt.setDate(0); dt.setHours(23,59,59,999); return dt; }
-function daysBetween(a,b){ const A = new Date(a); const B = new Date(b); A.setHours(0,0,0,0); B.setHours(0,0,0,0); const diff = Math.round((B - A) / (1000*60*60*24)); return diff; }
+function parseLocalDate(value){
+  if(!value) return new Date();
+  if(value instanceof Date && !Number.isNaN(value.getTime())) return new Date(value.getFullYear(), value.getMonth(), value.getDate());
+  if(typeof value === 'string'){
+    const trimmed = value.trim();
+    const match = trimmed.match(/^\d{4}-\d{2}-\d{2}$/);
+    if(match){
+      const [y,m,d] = trimmed.split('-').map(Number);
+      return new Date(y, m-1, d);
+    }
+    const dt = new Date(trimmed);
+    if(!Number.isNaN(dt.getTime())){
+      const fmt = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Guayaquil', year: 'numeric', month: '2-digit', day: '2-digit' });
+      const parts = fmt.formatToParts(dt).reduce((acc, p) => { if(p.type !== 'literal') acc[p.type] = p.value; return acc; }, {});
+      if(parts.year && parts.month && parts.day) return new Date(Number(parts.year), Number(parts.month)-1, Number(parts.day));
+      return new Date(dt.getFullYear(), dt.getMonth(), dt.getDate());
+    }
+  }
+  const dt = new Date(value);
+  if(Number.isNaN(dt.getTime())) return new Date();
+  const fmt = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Guayaquil', year: 'numeric', month: '2-digit', day: '2-digit' });
+  const parts = fmt.formatToParts(dt).reduce((acc, p) => { if(p.type !== 'literal') acc[p.type] = p.value; return acc; }, {});
+  if(parts.year && parts.month && parts.day) return new Date(Number(parts.year), Number(parts.month)-1, Number(parts.day));
+  return new Date(dt.getFullYear(), dt.getMonth(), dt.getDate());
+}
+function startOfMonth(d){ const dt = parseLocalDate(d); dt.setDate(1); dt.setHours(0,0,0,0); return dt; }
+function endOfMonth(d){ const dt = parseLocalDate(d); dt.setMonth(dt.getMonth()+1); dt.setDate(0); dt.setHours(23,59,59,999); return dt; }
+function startOfDay(d){ const dt = parseLocalDate(d); dt.setHours(0,0,0,0); return dt; }
+function addDays(d, count){ const dt = parseLocalDate(d); dt.setDate(dt.getDate() + count); return dt; }
+function startOfWeek(d, weekStartsOn = 1){
+  const dt = parseLocalDate(d);
+  const day = dt.getDay();
+  const diff = (day - weekStartsOn + 7) % 7;
+  dt.setDate(dt.getDate() - diff);
+  dt.setHours(0,0,0,0);
+  return dt;
+}
+function daysBetween(a,b){ const A = startOfDay(a); const B = startOfDay(b); const diff = Math.floor((B - A) / (1000*60*60*24)); return diff; }
+
+function normalizeDateForComparison(value){
+  if(!value) return null;
+  const dt = new Date(value);
+  if(Number.isNaN(dt.getTime())) return null;
+  const fmt = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Guayaquil', year: 'numeric', month: '2-digit', day: '2-digit' });
+  const parts = fmt.formatToParts(dt).reduce((acc, p) => { if(p.type !== 'literal') acc[p.type] = p.value; return acc; }, {});
+  if(parts.year && parts.month && parts.day){
+    return new Date(Number(parts.year), Number(parts.month)-1, Number(parts.day), 0, 0, 0, 0);
+  }
+  return new Date(dt.getFullYear(), dt.getMonth(), dt.getDate(), 0, 0, 0, 0);
+}
 
 function statusColor(status){
   if(!status) return '#6b7280';
@@ -18,7 +65,7 @@ function statusColor(status){
 function initials(name){ if(!name) return ''; const parts = name.split(' '); return (parts[0][0]||'').toUpperCase() + (parts[1]? (parts[1][0]||'').toUpperCase() : ''); }
 
 export default function CalendarScheduleSimple({ tecnicos=[], tickets=[], view='month', currentDate=null, filterTecnico=null, onlyAvailable=false, escalados=[], onEventClick=null }){
-  const date = currentDate ? new Date(currentDate) : new Date();
+  const date = parseLocalDate(currentDate || new Date());
   // mapear técnicos para búsqueda rápida (avatar, nombre)
   const techMap = useMemo(()=>{
     const m = {};
@@ -57,50 +104,191 @@ export default function CalendarScheduleSimple({ tecnicos=[], tickets=[], view='
   // Construir filas de recursos (incluir 'Sin asignar')
   const techRows = useMemo(()=>{
     const rows = (tecnicos||[]).map(t=> ({ id: t.email||t.id||t.nombre, title: t.nombre || t.email || 'Técnico', avatar: t.avatar || t.foto || t.image || t.profile_image || null }));
-    // include unassigned row
     rows.push({ id: '__sin_asignar', title: 'Sin asignar', avatar: null });
     return rows;
   }, [tecnicos]);
 
-  if(view === 'month' || view === 'year' || view === 'week'){
-    // cuadrícula del mes
+  const visibleTechRows = useMemo(()=>{
+    let rows = techRows;
+    if(filterTecnico){ rows = rows.filter(r => String(r.id) === String(filterTecnico)); }
+    if(onlyAvailable){
+      const busyIds = new Set((tickets||[]).filter(t => t.tecnico || t.tecnico_email || t.tecnico_id || t.tecnicoId || t.tecnico_nombre || t.tecnicoNombre).map(t => String(t.tecnico || t.tecnico_email || t.tecnico_id || t.tecnicoId || t.tecnico_nombre || t.tecnicoNombre)));
+      rows = rows.filter(r => !busyIds.has(String(r.id)) || String(r.id) === '__sin_asignar');
+    }
+    return rows;
+  }, [techRows, filterTecnico, onlyAvailable, tickets]);
+
+  if(view === 'year'){
+    const months = Array.from({length:12}, (_,i)=> new Date(date.getFullYear(), i, 1));
+    const monthNames = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+    const yearEvents = (tickets||[]).map(tt=>{
+      const s = tt.fecha_creacion || tt.fecha || tt.fecha_programada || null;
+      const start = s ? new Date(s) : null;
+      if(!start) return null;
+      const techKey = (tt.tecnico || tt.tecnico_email || tt.tecnicoId || tt.tecnico_id || '') || '__sin_asignar';
+      const tech = techMap[String(techKey)] || null;
+      return { ...tt, start, tech, techKey };
+    }).filter(Boolean);
+
+    return (
+      <div style={{overflowX:'auto', position:'relative'}}>
+        <div style={{display:'flex', alignItems:'center', padding:'8px 12px', gap:12}}>
+          <div style={{width:300}} />
+          <div style={{display:'flex', gap:12, alignItems:'center', flexWrap:'wrap'}}>
+            <div style={{display:'flex',gap:8,alignItems:'center'}}><div style={{width:12,height:12,background:statusColor('resuelto'),borderRadius:4}}></div><div style={{fontSize:12}}>Resuelto</div></div>
+            <div style={{display:'flex',gap:8,alignItems:'center'}}><div style={{width:12,height:12,background:statusColor('en proceso'),borderRadius:4}}></div><div style={{fontSize:12}}>En Proceso</div></div>
+            <div style={{display:'flex',gap:8,alignItems:'center'}}><div style={{width:12,height:12,background:statusColor('espera'),borderRadius:4}}></div><div style={{fontSize:12}}>En Espera</div></div>
+            <div style={{display:'flex',gap:8,alignItems:'center'}}><div style={{width:12,height:12,background:statusColor('escalad'),borderRadius:4}}></div><div style={{fontSize:12}}>Escalado</div></div>
+          </div>
+        </div>
+        <div style={{display:'grid', gridTemplateColumns:'300px auto', alignItems:'stretch', width:'fit-content'}}>
+          <div style={{width:300, height:32, boxSizing:'border-box', borderBottom:'1px solid #f3f4f6', display:'flex', alignItems:'center', paddingLeft:12, fontWeight:700, flex:'0 0 300px'}}>{'Técnicos / Año'}</div>
+          <div style={{display:'grid', gridTemplateColumns:`repeat(${months.length}, minmax(72px, 1fr))`, width: `${months.length * 72}px`}}>
+            {months.map((m,i)=> (
+              <div key={i} style={{height:32, boxSizing:'border-box', borderRight:'1px solid #f3f4f6', borderTop:'1px solid #f3f4f6', borderBottom:'1px solid #f3f4f6', background:'#fff', fontSize:11, padding:'4px 6px', textAlign:'center'}}>
+                {monthNames[i]}
+              </div>
+            ))}
+          </div>
+        </div>
+        <div>
+          {visibleTechRows.map((rw)=> (
+            <div key={rw.row ? rw.row.id : rw.id} style={{display:'grid', gridTemplateColumns:'300px auto', borderBottom:'1px solid #f3f4f6', minHeight: 44, alignItems:'stretch', width:'fit-content'}}>
+              <div style={{width:300, display:'flex',alignItems:'center',paddingLeft:12,gap:10,boxSizing:'border-box', flex:'0 0 300px'}}>
+                {rw.avatar ? (
+                  <img src={rw.avatar} alt={rw.title} style={{width:44,height:44,borderRadius:22,objectFit:'cover',marginRight:10,boxShadow:'0 1px 2px rgba(0,0,0,0.06)'}} />
+                ) : (
+                  <div style={{width:44,height:44,borderRadius:22,background:'#eef2ff',display:'flex',alignItems:'center',justifyContent:'center',fontWeight:700,color:'#1e3a8a',marginRight:10}}>{initials(rw.title)}</div>
+                )}
+                <div title={rw.title} style={{fontSize:13, lineHeight:'1.2', whiteSpace:'normal', overflowWrap:'break-word', cursor:'help'}}>{rw.title}</div>
+              </div>
+              <div style={{display:'grid', gridTemplateColumns:`repeat(${months.length}, minmax(72px, 1fr))`, width: `${months.length * 72}px`, minHeight: 42}}>
+                {months.map((m, idx)=> {
+                  const monthItems = yearEvents.filter(ev => {
+                    const rowId = rw.id || '__sin_asignar';
+                    const techId = (ev.tecnico || ev.tecnico_email || ev.tecnico_id || ev.tecnicoId || '') || '__sin_asignar';
+                    const matchesTech = rowId === '__sin_asignar' ? (!ev.tecnico && !ev.tecnico_email && !ev.tecnico_id && !ev.tecnicoId) : String(techId) === String(rowId);
+                    return matchesTech && ev.start && ev.start.getFullYear() === date.getFullYear() && ev.start.getMonth() === idx;
+                  });
+                  return (
+                    <div key={idx} style={{borderRight:'1px solid #f8fafc', boxSizing:'border-box', minHeight:42, padding:'6px 4px', background:'#fafafa', display:'flex', alignItems:'center', justifyContent:'center', gap:4, flexWrap:'wrap'}}>
+                      {monthItems.slice(0, 3).map((ev, evIndex) => (
+                        <div key={`${ev.id}-${evIndex}`} title={ev.id} style={{width:16, height:16, borderRadius:4, background: ev.estado && ev.estado.toString().toLowerCase().includes('escalad') ? statusColor('escalad') : statusColor(ev.estado), boxShadow:'0 1px 2px rgba(0,0,0,0.08)'}} />
+                      ))}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if(view === 'month' || view === 'week' || view === 'day'){
     const monthStart = startOfMonth(date);
     const monthEnd = endOfMonth(date);
-    // calcular los días a mostrar (inicio de semana Lunes)
-    const startWeekDay = (monthStart.getDay() + 6) % 7; // 0=Mon
-    const gridStart = new Date(monthStart); gridStart.setDate(monthStart.getDate() - startWeekDay);
-    const totalDays = (view === 'week') ? 7 : 42; // week shows 7 days, month shows 6 weeks
-    const days = Array.from({length: totalDays}).map((_,i)=>{ const d = new Date(gridStart); d.setDate(gridStart.getDate()+i); return d; });
+    const gridStart = (view === 'week')
+      ? startOfWeek(date, 1)
+      : (view === 'day')
+        ? startOfDay(date)
+        : startOfWeek(monthStart, 1);
+    const totalDays = (view === 'week') ? 7 : (view === 'day') ? 1 : 42;
+    const days = Array.from({length: totalDays}).map((_,i)=> addDays(gridStart, i));
+    const cellWidth = (view === 'week') ? 120 : (view === 'day') ? 220 : 36;
 
-    // preparar eventos filtrados
     const evs = (tickets||[]).map(tt=>{
       const s = tt.fecha_creacion || tt.fecha || tt.fecha_programada || null;
       const start = s ? new Date(s) : null;
-      // prioridad: fecha_resuelto en tabla escalados si existe, luego ticket
       const escaladoRecord = (escalados||[]).find(e=> String(e.ticket_id) === String(tt.id));
       const endDateRaw = (escaladoRecord && (escaladoRecord.fecha_resuelto || escaladoRecord.fechaResuelto)) ? (escaladoRecord.fecha_resuelto || escaladoRecord.fechaResuelto) : (tt.fecha_resuelto || tt.fechaResuelto || null);
-      const end = endDateRaw ? new Date(endDateRaw) : new Date(); // unresolved expand until today
+      const end = endDateRaw ? new Date(endDateRaw) : new Date();
       const techKey = (tt.tecnico || tt.tecnico_email || tt.tecnicoId || tt.tecnico_id || '') || '__sin_asignar';
       const tech = techMap[String(techKey)] || null;
       const isEscalado = !!escaladoRecord || String(tt.estado||'').toLowerCase().includes('escalad');
-      return { raw: tt, start, end, status: tt.estado, techKey, tech, isEscalado, escaladoRecord };
+      const normalizedStart = start ? normalizeDateForComparison(start) : null;
+      const normalizedEnd = end ? normalizeDateForComparison(end) : null;
+      return { raw: tt, start, end, status: tt.estado, techKey, tech, isEscalado, escaladoRecord, normalizedStart, normalizedEnd };
     }).filter(ev=> ev.start);
 
-    // para cada recurso, construir la lista de eventos que se solapan
-    const rowsWithEvents = techRows.map(r=>{
+    const rowsWithEvents = visibleTechRows.map(r=>{
       const items = evs.filter(ev=>{
         const techId = (ev.raw.tecnico||'') || (ev.raw.tecnico_email||'') || '__sin_asignar';
         const rowId = r.id || '__sin_asignar';
-        const matchesTech = rowId === '__sin_asignar' ? (!ev.raw.tecnico) : (String(techId) === String(rowId));
+        const matchesTech = rowId === '__sin_asignar' ? (!ev.raw.tecnico && !ev.raw.tecnico_email && !ev.raw.tecnico_id && !ev.raw.tecnicoId) : (String(techId) === String(rowId));
         if(!matchesTech) return false;
-        // date overlap
-        return !(ev.end < days[0] || ev.start > days[days.length-1]);
-      }).map(ev=>({ ...ev, raw: ev.raw }));
-      return { row: r, items };
+        const normalizedStart = ev.normalizedStart || normalizeDateForComparison(ev.start);
+        const normalizedEnd = ev.normalizedEnd || normalizeDateForComparison(ev.end);
+        return !(normalizedEnd < days[0] || normalizedStart > days[days.length-1]);
+      }).map(ev=>({ ...ev, raw: ev.raw })).sort((a,b)=> (new Date(a.start) - new Date(b.start)) || (new Date(a.end) - new Date(b.end)));
+
+      const lanes = [];
+      const positionedItems = items.map(item => {
+        const startIdx = Math.max(0, daysBetween(days[0], item.start));
+        const endIdx = Math.min(days.length - 1, daysBetween(days[0], item.end));
+        const laneIndex = lanes.findIndex((laneEnd) => laneEnd < startIdx);
+        const assignedLane = laneIndex === -1 ? lanes.length : laneIndex;
+        lanes[assignedLane] = endIdx;
+        return { ...item, startIdx, endIdx, lane: assignedLane };
+      });
+
+      const laneCount = Math.max(1, ...positionedItems.map(item => item.lane + 1), 1);
+      return { row: r, items: positionedItems, rowHeight: Math.max(88, laneCount * 26 + 16) };
     });
 
-    // diseño: cada fila renderiza bloques posicionados por índice de día y que abarcan varios días
-    const cellWidth = (view === 'week') ? 120 : 36;
+    if(view === 'day'){
+      const dayOnlyLabel = 'Técnicos / Día';
+      return (
+        <div style={{overflowX:'auto', position:'relative'}}>
+          <div style={{display:'flex', alignItems:'center', padding:'8px 12px', gap:12}}>
+            <div style={{width:300}} />
+            <div style={{display:'flex', gap:12, alignItems:'center'}}>
+              <div style={{display:'flex',gap:8,alignItems:'center'}}><div style={{width:12,height:12,background:statusColor('resuelto'),borderRadius:4}}></div><div style={{fontSize:12}}>Resuelto</div></div>
+              <div style={{display:'flex',gap:8,alignItems:'center'}}><div style={{width:12,height:12,background:statusColor('en proceso'),borderRadius:4}}></div><div style={{fontSize:12}}>En Proceso</div></div>
+              <div style={{display:'flex',gap:8,alignItems:'center'}}><div style={{width:12,height:12,background:statusColor('espera'),borderRadius:4}}></div><div style={{fontSize:12}}>En Espera</div></div>
+              <div style={{display:'flex',gap:8,alignItems:'center'}}><div style={{width:12,height:12,background:statusColor('escalad'),borderRadius:4}}></div><div style={{fontSize:12}}>Escalado</div></div>
+            </div>
+          </div>
+          <div style={{display:'grid', gridTemplateColumns:'300px auto', alignItems:'stretch', width:'fit-content'}}>
+            <div style={{width:300, height:32, boxSizing:'border-box', borderBottom:'1px solid #f3f4f6', display:'flex', alignItems:'center', paddingLeft:12, fontWeight:700, flex:'0 0 300px'}}>{dayOnlyLabel}</div>
+            <div style={{display:'grid', gridTemplateColumns:`repeat(${days.length}, ${cellWidth}px)`, gap:0, width: days.length * cellWidth}}>
+              {days.map((d,i)=> (
+                <div key={i} style={{height:32,width:cellWidth,boxSizing:'border-box',borderRight:'1px solid #f3f4f6',borderTop:'1px solid #f3f4f6',borderBottom:'1px solid #f3f4f6',background:'#fff', fontSize:11, padding:4}}>
+                  <div style={{fontSize:11,color:'#374151'}}>{d.getDate()}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div>
+            {visibleTechRows.map((rw)=> (
+              <div key={rw.id} style={{display:'grid', gridTemplateColumns:'300px auto', borderBottom:'1px solid #f3f4f6', minHeight: 60, alignItems:'stretch', width:'fit-content'}}>
+                <div style={{width:300, display:'flex',alignItems:'center',paddingLeft:12,gap:10,boxSizing:'border-box', flex:'0 0 300px'}}>
+                  {rw.avatar ? (<img src={rw.avatar} alt={rw.title} style={{width:44,height:44,borderRadius:22,objectFit:'cover',marginRight:10,boxShadow:'0 1px 2px rgba(0,0,0,0.06)'}} />) : (<div style={{width:44,height:44,borderRadius:22,background:'#eef2ff',display:'flex',alignItems:'center',justifyContent:'center',fontWeight:700,color:'#1e3a8a',marginRight:10}}>{initials(rw.title)}</div>)}
+                  <div title={rw.title} style={{fontSize:13, lineHeight:'1.2', whiteSpace:'normal', overflowWrap:'break-word'}}>{rw.title}</div>
+                </div>
+                <div style={{position:'relative', width: `${days.length * cellWidth}px`, flex:'0 0 auto'}}>
+                  <div style={{display:'grid', gridTemplateColumns:`repeat(${days.length}, ${cellWidth}px)`, position:'relative', minHeight:60, width: days.length * cellWidth}}>
+                    {days.map((d,i)=> <div key={i} style={{borderRight:'1px solid #f8fafc', minHeight:60, boxSizing:'border-box'}} />)}
+                    {rowsWithEvents.filter(rw2 => String(rw2.row.id) === String(rw.id)).flatMap(rw2 => rw2.items).map((it)=> {
+                      const startColumn = 1;
+                      const span = 1;
+                      const color = it.isEscalado ? statusColor('escalad') : statusColor(it.status || it.raw.estado);
+                      return (
+                        <div key={`${it.raw.id}-${it.lane}`} onMouseEnter={(e)=>showTooltip(e, {...it.raw, escalado: it.escaladoRecord, isEscalado: it.isEscalado})} onMouseLeave={hideTooltip} onClick={() => { if(onEventClick) onEventClick(it.raw); }} role="article" aria-label={`Tique ${it.raw.id} ${it.raw.estado||''}`} style={{gridColumn:`${startColumn} / span ${span}`, gridRow: it.lane + 1, margin:'2px 2px 0 2px', borderRadius:8, background:color, color:'#fff', padding:'8px 10px', fontSize:12, overflow:'hidden', whiteSpace:'nowrap', textOverflow:'ellipsis', boxShadow:'0 3px 6px rgba(0,0,0,0.08)', border:'1px solid rgba(0,0,0,0.06)', cursor:onEventClick ? 'pointer' : 'default', display:'flex', alignItems:'center', gap:8, zIndex:2, minHeight:24, maxHeight:26, alignSelf:'stretch'}}>
+                          <div style={{width:18,height:18,borderRadius:9,background:'rgba(255,255,255,0.12)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:10,fontWeight:700,flex:'0 0 auto'}}>{initials(it.raw.tecnico || it.raw.tecnico_nombre || it.tech?.nombre || '')}</div>
+                          <div style={{overflow:'hidden',textOverflow:'ellipsis'}}><div style={{fontWeight:700, fontSize:12}}>#{it.raw.id}</div></div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    }
     return (
       <div style={{overflowX:'auto', position:'relative'}}>
         {/* leyenda eliminada (integrada en otro lugar) */}
@@ -126,14 +314,15 @@ export default function CalendarScheduleSimple({ tecnicos=[], tickets=[], view='
           </div>
           {/* fila de encabezado: celda de título izquierda + cuadrícula de días */}
           {(() => {
-            const headerLabel = (view === 'day') ? 'Técnicos / Día' : (view === 'week') ? 'Técnicos / Semana' : (view === 'month') ? 'Técnicos / Mes' : 'Técnicos / Año';
+            const headerLabel = (view === 'day') ? 'Técnicos / Día' : (view === 'week') ? 'Técnicos / Semana' : 'Técnicos / Mes';
+            const showMonthBg = (view === 'month' || view === 'week' || view === 'day');
             return (
-              <div style={{display:'flex', alignItems:'stretch'}}>
-                <div style={{width:300, height:32, boxSizing:'border-box', borderBottom:'1px solid #f3f4f6', display:'flex', alignItems:'center', paddingLeft:12, fontWeight:700}}>{headerLabel}</div>
-                <div style={{flex: '0 0 auto'}}>
-                  <div style={{display:'grid',gridTemplateColumns:`repeat(${days.length}, ${cellWidth}px)`, gap:0}}>
+              <div style={{display:'grid', gridTemplateColumns:'300px auto', alignItems:'stretch', width:'fit-content'}}>
+                <div style={{width:300, height:32, boxSizing:'border-box', borderBottom:'1px solid #f3f4f6', display:'flex', alignItems:'center', paddingLeft:12, fontWeight:700, flex:'0 0 300px'}}>{headerLabel}</div>
+                <div style={{flex:'0 0 auto', overflowX:'auto', overflowY:'hidden', minWidth: days.length * cellWidth}}>
+                  <div style={{display:'grid', gridTemplateColumns:`repeat(${days.length}, ${cellWidth}px)`, gap:0, width: days.length * cellWidth, minWidth: days.length * cellWidth}}>
                     {days.map((d,i)=> (
-                      <div key={i} style={{height:32,width:cellWidth,boxSizing:'border-box',border:'1px solid #f3f4f6',background: d.getMonth() === monthStart.getMonth() ? '#fff' : '#fafafa', fontSize:11, padding:4}}>
+                      <div key={i} style={{height:32,width:cellWidth,boxSizing:'border-box',borderRight:'1px solid #f3f4f6',borderTop:'1px solid #f3f4f6',borderBottom:'1px solid #f3f4f6',background: showMonthBg && d.getMonth() === monthStart.getMonth() ? '#fff' : '#fafafa', fontSize:11, padding:4}}>
                         <div style={{fontSize:11,color:'#374151'}}>{d.getDate()}</div>
                       </div>
                     ))}
@@ -144,8 +333,8 @@ export default function CalendarScheduleSimple({ tecnicos=[], tickets=[], view='
           })()}
           <div>
             {rowsWithEvents.map((rw,rowIndex)=> (
-              <div key={rw.row.id} style={{display:'flex', borderBottom:'1px solid #f3f4f6', minHeight:88, alignItems:'stretch'}}>
-                <div style={{width:300, display:'flex',alignItems:'center',paddingLeft:12,gap:10,boxSizing:'border-box'}}>
+              <div key={rw.row.id} style={{display:'grid', gridTemplateColumns:'300px auto', borderBottom:'1px solid #f3f4f6', minHeight: rw.rowHeight, alignItems:'stretch', width:'fit-content'}}>
+                <div style={{width:300, display:'flex',alignItems:'center',paddingLeft:12,gap:10,boxSizing:'border-box', flex:'0 0 300px'}}>
                   {rw.row.avatar ? (
                     <img src={rw.row.avatar} alt={rw.row.title} style={{width:44,height:44,borderRadius:22,objectFit:'cover',marginRight:10,boxShadow:'0 1px 2px rgba(0,0,0,0.06)'}} />
                   ) : (
@@ -153,54 +342,57 @@ export default function CalendarScheduleSimple({ tecnicos=[], tickets=[], view='
                   )}
                   <div title={rw.row.title} tabIndex={0} aria-label={`Técnico ${rw.row.title}`} style={{fontSize:13, lineHeight:'1.2', whiteSpace:'normal', overflowWrap:'break-word', cursor:'help'}}>{rw.row.title}</div>
                 </div>
-                <div style={{position:'relative', width: `${days.length * cellWidth}px`, flex:'0 0 auto'}}>
-                  {/* cuadrícula de fondo para esta fila */}
-                  <div style={{position:'absolute', left:0, right:0, top:0, bottom:0, display:'grid', gridTemplateColumns:`repeat(${days.length}, ${cellWidth}px)`}}>
-                    {days.map((d,i)=> <div key={i} style={{borderRight:'1px solid #f8fafc'}} />)}
-                  </div>
-                  {/* eventos */}
-                  <div style={{position:'relative', paddingLeft:0, minHeight:88}}>
-                    {(() => {
-                      const maxVisible = 4;
-                      const visibleItems = rw.items.slice(0, maxVisible);
-                      const hiddenItems = rw.items.slice(maxVisible);
+                <div style={{position:'relative', width: `${days.length * cellWidth}px`, minWidth: `${days.length * cellWidth}px`, flex:'0 0 auto'}}>
+                  <div style={{display:'grid', gridTemplateColumns:`repeat(${days.length}, ${cellWidth}px)`, position:'relative', minHeight: rw.rowHeight, width: days.length * cellWidth, minWidth: days.length * cellWidth}}>
+                    {days.map((d,i)=> <div key={i} style={{borderRight:'1px solid #f8fafc', minHeight: rw.rowHeight, boxSizing:'border-box'}} />)}
+                    {rw.items.map((it)=> {
+                      const startColumn = Math.max(0, it.startIdx) + 1;
+                      const span = Math.max(1, it.endIdx - it.startIdx + 1);
+                      const color = it.isEscalado ? statusColor('escalad') : statusColor(it.status || it.raw.estado);
                       return (
-                        <>
-                          {visibleItems.map((it,idx)=>{
-                            const startIdx = Math.max(0, daysBetween(days[0], it.start));
-                            const endIdx = Math.min(days.length-1, daysBetween(days[0], it.end));
-                            const left = startIdx * cellWidth;
-                            const span = Math.max(1, endIdx - startIdx + 1);
-                            const width = span * cellWidth - 6;
-                            const color = it.isEscalado ? statusColor('escalad') : statusColor(it.status || it.raw.estado);
-                            const top = 10 + (idx*24);
-                            return (
-                              <div key={idx} onMouseEnter={(e)=>showTooltip(e, {...it.raw, escalado: it.escaladoRecord, isEscalado: it.isEscalado})} onMouseLeave={hideTooltip} onClick={() => { if(onEventClick) onEventClick(it.raw); }} title={(it.raw && (it.raw.solicitante || ''))} role="article" aria-label={`Tique ${it.raw.id} ${it.raw.estado||''}`} style={{position:'absolute', left, top, width, borderRadius:8, background:color, color:'#fff', padding:'8px 10px', fontSize:12, overflow:'hidden', whiteSpace:'nowrap', textOverflow:'ellipsis', boxShadow:'0 3px 6px rgba(0,0,0,0.08)', border:'1px solid rgba(0,0,0,0.06)', cursor: onEventClick ? 'pointer' : 'default', display:'flex',alignItems:'center',gap:8}}>
-                                {/* avatar pequeño */}
-                                { it.tech && (it.tech.avatar || it.tech.foto || it.tech.image) ? (
-                                  <img src={it.tech.avatar||it.tech.foto||it.tech.image} alt={it.tech.nombre||''} style={{width:18,height:18,borderRadius:9,objectFit:'cover',flex:'0 0 auto'}} />
-                                ) : (
-                                  <div style={{width:18,height:18,borderRadius:9,background:'rgba(255,255,255,0.12)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:10,fontWeight:700,flex:'0 0 auto'}}>{initials(it.raw.tecnico || it.raw.tecnico_nombre || it.tech?.nombre || '')}</div>
-                                )}
-                                <div style={{overflow:'hidden',textOverflow:'ellipsis'}}>
-                                  <div style={{fontWeight:700, fontSize:12}}>#{it.raw.id} {it.raw.solicitante? (' - '+ (it.raw.solicitante)): ''}</div>
-                                </div>
-                              </div>
-                            )
-                          })}
-                          {hiddenItems.length>0 && (()=>{
-                            const it = hiddenItems[0];
-                            const startIdx = Math.max(0, daysBetween(days[0], it.start));
-                            const left = startIdx * cellWidth;
-                            return (
-                              <div key="more" tabIndex={0} role="button" onKeyDown={(e)=>{ if(e.key==='Enter' || e.key===' ') openModal(`+${hiddenItems.length} más`, hiddenItems.map(h=>h.raw)) }} style={{position:'absolute', left, top:10 + ((maxVisible-1)*24), width: (cellWidth*1)-6, borderRadius:8, background:'#081023', color:'#fff', padding:'6px 8px', fontSize:12, display:'flex',alignItems:'center',justifyContent:'center', cursor:'pointer', boxShadow:'0 4px 12px rgba(2,6,23,0.35)', border:'1px solid rgba(255,255,255,0.06)'}} onClick={()=> openModal(`+${hiddenItems.length} más`, hiddenItems.map(h=>h.raw))} aria-label={`Abrir ${hiddenItems.length} eventos ocultos`}>
-                                +{hiddenItems.length} más
-                              </div>
-                            )
-                          })()}
-                        </>
+                        <div
+                          key={`${it.raw.id}-${it.lane}`}
+                          onMouseEnter={(e)=>showTooltip(e, {...it.raw, escalado: it.escaladoRecord, isEscalado: it.isEscalado})}
+                          onMouseLeave={hideTooltip}
+                          onClick={() => { if(onEventClick) onEventClick(it.raw); }}
+                          title={(it.raw && (it.raw.solicitante || ''))}
+                          role="article"
+                          aria-label={`Tique ${it.raw.id} ${it.raw.estado||''}`}
+                          style={{
+                            gridColumn: `${startColumn} / span ${span}`,
+                            gridRow: it.lane + 1,
+                            margin: '2px 2px 0 2px',
+                            borderRadius:8,
+                            background: color,
+                            color:'#fff',
+                            padding:'8px 10px',
+                            fontSize:12,
+                            overflow:'hidden',
+                            whiteSpace:'nowrap',
+                            textOverflow:'ellipsis',
+                            boxShadow:'0 3px 6px rgba(0,0,0,0.08)',
+                            border:'1px solid rgba(0,0,0,0.06)',
+                            cursor: onEventClick ? 'pointer' : 'default',
+                            display:'flex',
+                            alignItems:'center',
+                            gap:8,
+                            zIndex:2,
+                            minHeight:24,
+                            maxHeight:26,
+                            alignSelf:'stretch'
+                          }}
+                        >
+                          { it.tech && (it.tech.avatar || it.tech.foto || it.tech.image) ? (
+                            <img src={it.tech.avatar||it.tech.foto||it.tech.image} alt={it.tech.nombre||''} style={{width:18,height:18,borderRadius:9,objectFit:'cover',flex:'0 0 auto'}} />
+                          ) : (
+                            <div style={{width:18,height:18,borderRadius:9,background:'rgba(255,255,255,0.12)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:10,fontWeight:700,flex:'0 0 auto'}}>{initials(it.raw.tecnico || it.raw.tecnico_nombre || it.tech?.nombre || '')}</div>
+                          )}
+                          <div style={{overflow:'hidden',textOverflow:'ellipsis'}}>
+                            <div style={{fontWeight:700, fontSize:12}}>#{it.raw.id} {it.raw.solicitante? (' - '+ (it.raw.solicitante)): ''}</div>
+                          </div>
+                        </div>
                       )
-                    })()}
+                    })}
                   </div>
                 </div>
               </div>
