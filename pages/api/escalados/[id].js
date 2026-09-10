@@ -56,17 +56,17 @@ async function handler(req,res){
             if(s === 'en proceso'){
               // NO modificar la tabla `tickets` aquí. Solo insertar historial para trazabilidad.
               console.log('escalados/[id] - inserting historial En Proceso (no ticket update)', ticketId, user?.email || user?.name, nota);
-              const h = await db.query('INSERT INTO historial(ticket_id, accion, estado, usuario, detalle) VALUES($1,$2,$3,$4,$5) RETURNING *', [ticketId, 'Proveedor: En Proceso', 'En Proceso', user?.email || user?.name || 'Proveedor', nota || '']);
+              const h = await db.query('INSERT INTO historial(ticket_id, accion, estado, usuario, detalle) VALUES($1,$2,$3,$4,$5) RETURNING *', [ticketId, 'Proveedor '+ proveedor +': En Proceso', 'En Proceso', user?.email || user?.name || 'Proveedor', 'Not: '+ nota  + 'Obs: '+ observaciones || '']);
               historialInserted.push(...h.rows);
             }
             if(s === 'en espera'){
               console.log('escalados/[id] - inserting historial En Espera (no ticket update)', ticketId, user?.email || user?.name, nota);
-              const h = await db.query('INSERT INTO historial(ticket_id, accion, estado, usuario, detalle) VALUES($1,$2,$3,$4,$5) RETURNING *', [ticketId, 'Proveedor: En Espera', 'En Espera', user?.email || user?.name || 'Proveedor', nota || '']);
+              const h = await db.query('INSERT INTO historial(ticket_id, accion, estado, usuario, detalle) VALUES($1,$2,$3,$4,$5) RETURNING *', [ticketId, 'Proveedor '+ proveedor +': En Espera', 'En Espera', user?.email || user?.name || 'Proveedor', 'Not: '+ nota  + 'Obs: '+ observaciones || '']);
               historialInserted.push(...h.rows);
             }
             if(s === 'resuelto'){
               console.log('escalados/[id] - inserting historial Resuelto (no ticket update)', ticketId, user?.email || user?.name, nota);
-              const h = await db.query('INSERT INTO historial(ticket_id, accion, estado, usuario, detalle) VALUES($1,$2,$3,$4,$5) RETURNING *', [ticketId, 'Proveedor Resuelto', 'Resuelto', user?.email || user?.name || 'Proveedor', nota || '']);
+              const h = await db.query('INSERT INTO historial(ticket_id, accion, estado, usuario, detalle) VALUES($1,$2,$3,$4,$5) RETURNING *', [ticketId, 'Proveedor '+ proveedor +': Resuelto', 'Resuelto', user?.email || user?.name || 'Proveedor', 'Not: '+ nota  + 'Obs: '+ observaciones || '']);
               historialInserted.push(...h.rows);
             }
         }

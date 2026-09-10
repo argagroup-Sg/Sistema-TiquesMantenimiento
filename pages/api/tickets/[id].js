@@ -28,6 +28,10 @@ async function handler(req, res) {
     if (data.nota) { fields.push(`nota=$${idx++}`); vals.push(data.nota); }
     if (!fields.length) return res.status(400).json({ error: 'Nada para actualizar' });
 
+
+    const combinedNota = data.nota ? ('Nota: ' + data.nota + ' — Descripción: ' + (data.descripcion || '')) : ('Descripción: ' + (data.descripcion || ''));
+
+
     // requerir autenticación para actualizaciones
     const { getUserFromReq, requireRole } = require('../../../lib/auth');
     const user = await getUserFromReq(req);
@@ -46,7 +50,7 @@ async function handler(req, res) {
     const q = `UPDATE tickets SET ${fields.join(',')}, ultima_actualizacion=now() WHERE id=$${idx}`;
     vals.push(id);
     await db.query(q, vals);
-    await db.query('INSERT INTO historial(ticket_id, accion, estado, usuario, detalle) VALUES($1,$2,$3,$4,$5)', [id, 'Actualización', data.estado || null, user.email || user.name || 'Sistema', data.nota || '']);
+    await db.query('INSERT INTO historial(ticket_id, accion, estado, usuario, detalle) VALUES($1,$2,$3,$4,$5)', [id, 'Actualización', data.estado || null, user.email || user.name || 'Sistema', combinedNota || data.nota || '']);
     return res.json({ success: true });
   }
 
