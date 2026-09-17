@@ -1,7 +1,7 @@
 import React, { useMemo, useState, useRef, useEffect } from 'react'
 import { formatDate } from '../lib/format'
 
-export default function SpreadsheetTable({ tickets = [], onCellEdit, areas = [], maquinas = [], tecnicos = [], onGuardar, onEscalar, onToggleHist, serverTick=0 } ){
+export default function SpreadsheetTable({ tickets = [], onCellEdit, areas = [], maquinas = [], tecnicos = [], onGuardar, onEscalar, onToggleHist, onShowInfo, serverTick=0 } ){
   const cols = useMemo(()=>[
     { key:'id', label:'ID', width:90 },
     { key:'fecha_creacion', label:'Fecha creación', width:160 },
@@ -196,6 +196,7 @@ export default function SpreadsheetTable({ tickets = [], onCellEdit, areas = [],
                         <button onClick={()=> onGuardar && onGuardar(r.id)} disabled={isLocked} className="btn-success">Guardar</button>
                         <button onClick={()=> onEscalar && onEscalar(r.id)} disabled={isLocked} className="btn-warning">Escalar</button>
                         <button onClick={()=> onToggleHist && onToggleHist(r.id)} className="btn-secondary">Historial</button>
+                        <button onClick={()=> onShowInfo && onShowInfo(r)} className="btn-secondary" title="Ver información del ticket" style={{minWidth: 34, padding: '6px 8px'}}>Info</button>
                       </div>
                     )
                     if(c.key === 'fecha_creacion') return (

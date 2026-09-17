@@ -136,6 +136,7 @@ export default function Admin(){
   const [historialByTicket, setHistorialByTicket] = useState({});
   const [expandedTickets, setExpandedTickets] = useState([]);
   const [expandedEscalados, setExpandedEscalados] = useState([]);
+  const [selectedTicketInfo, setSelectedTicketInfo] = useState(null);
   const [adminTab, setAdminTab] = useState('tiques');
   const [ticketSort, setTicketSort] = useState('fecha_desc');
   const [ticketQuery, setTicketQuery] = useState('');
@@ -240,6 +241,15 @@ export default function Admin(){
       // marcar esto como una recarga desde el servidor para que los componentes hijos actualicen sus mapas de estado original
       setServerTick(s => s + 1);
     }catch(err){ console.error('loadAll unexpected error', err); showToast('Error al cargar datos', 'error'); }
+  }
+
+  function openTicketInfo(ticket){
+    if(!ticket) return;
+    setSelectedTicketInfo(ticket);
+  }
+
+  function closeTicketInfo(){
+    setSelectedTicketInfo(null);
   }
 
   async function guardarTicketAdmin(id){
@@ -674,9 +684,64 @@ export default function Admin(){
               onGuardar={(id)=> guardarTicketAdmin(id)}
               onEscalar={(id)=> escalarTicket(id)}
               onToggleHist={(id)=> toggleHist(id)}
+              onShowInfo={(ticket)=> openTicketInfo(ticket)}
               serverTick={serverTick}
             />
           </div>
+          {selectedTicketInfo && (
+            <div style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.18)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 2000, padding: 20 }} onClick={closeTicketInfo}>
+              <div style={{ width: 'min(1000px, 92vw)', maxHeight: '86vh', overflowY: 'auto', background: '#f8fafc', borderRadius: 12, boxShadow: '0 24px 60px rgba(15, 23, 42, 0.18)', border: '1px solid #e5e7eb', padding: 20 }} onClick={(e)=> e.stopPropagation()}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 18 }}>
+                  <div style={{ fontSize: 18, fontWeight: 700, color: '#0f172a' }}>Detalle {selectedTicketInfo.id || 'tique'}</div>
+                  <button onClick={closeTicketInfo} style={{ border: 'none', background: '#e2e8f0', color: '#0f172a', borderRadius: 8, padding: '8px 14px', cursor: 'pointer', fontWeight: 600 }}>Cerrar</button>
+                </div>
+
+                <div style={{ display: 'grid', gap: 10, marginBottom: 18 }}>
+                  <div><strong>Motivo:</strong> <span>{selectedTicketInfo.descripcion || '—'}</span></div>
+                  <div><strong>Estado:</strong> <span>{selectedTicketInfo.estado || '—'}</span></div>
+                  <div><strong>Área:</strong> <span>{selectedTicketInfo.area || '—'}</span></div>
+                  <div><strong>Tipo de material:</strong> <span>{selectedTicketInfo.tipo_material || '—'}</span></div>
+                  <div><strong>Urgencia:</strong> <span>{selectedTicketInfo.urgencia || '—'}</span></div>
+                  <div><strong>Solicitante:</strong> <span>{selectedTicketInfo.solicitante || '—'}</span></div>
+                  <div><strong>Técnico:</strong> <span>{selectedTicketInfo.tecnico || '—'}</span></div>
+                  <div><strong>Máquina:</strong> <span>{selectedTicketInfo.maquina || '—'}</span></div>
+                  <div><strong>Fecha creación:</strong> <span>{selectedTicketInfo.fecha_creacion ? formatDate(selectedTicketInfo.fecha_creacion) : '—'}</span></div>
+                  <div><strong>Fecha asignación:</strong> <span>{selectedTicketInfo.fecha_asignacion ? formatDate(selectedTicketInfo.fecha_asignacion) : '—'}</span></div>
+                  <div><strong>Fecha en proceso:</strong> <span>{selectedTicketInfo.fecha_en_proceso ? formatDate(selectedTicketInfo.fecha_en_proceso) : '—'}</span></div>
+                  <div><strong>Fecha en espera:</strong> <span>{selectedTicketInfo.fecha_en_espera ? formatDate(selectedTicketInfo.fecha_en_espera) : '—'}</span></div>
+                  <div><strong>Fecha resuelto:</strong> <span>{selectedTicketInfo.fecha_resuelto ? formatDate(selectedTicketInfo.fecha_resuelto) : '—'}</span></div>
+                  <div><strong>Nota:</strong> <span>{selectedTicketInfo.nota || '—'}</span></div>
+                </div>
+
+                {((selectedTicketInfo.detalle_items || selectedTicketInfo.items || []).length > 0) && (
+                  <div style={{ overflowX: 'auto', border: '1px solid #e5e7eb', borderRadius: 8, background: '#fff' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 700 }}>
+                      <thead>
+                        <tr style={{ background: '#eef6ff' }}>
+                          <th style={{ textAlign: 'left', padding: '10px 8px', fontWeight: 700 }}>ITEM</th>
+                          <th style={{ textAlign: 'left', padding: '10px 8px', fontWeight: 700 }}>DESCRIPCIÓN</th>
+                          <th style={{ textAlign: 'left', padding: '10px 8px', fontWeight: 700 }}>CANTIDAD</th>
+                          <th style={{ textAlign: 'left', padding: '10px 8px', fontWeight: 700 }}>UNIDAD</th>
+                          <th style={{ textAlign: 'left', padding: '10px 8px', fontWeight: 700 }}>MARCA</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(selectedTicketInfo.detalle_items || selectedTicketInfo.items || []).map((item, idx) => (
+                          <tr key={`${item.id || idx}-${idx}`} style={{ borderTop: '1px solid #edf2f7' }}>
+                            <td style={{ padding: '10px 8px' }}>{item.item || item.id || idx + 1}</td>
+                            <td style={{ padding: '10px 8px' }}>{item.descripcion || item.nombre || '—'}</td>
+                            <td style={{ padding: '10px 8px' }}>{item.cantidad || item.qty || '—'}</td>
+                            <td style={{ padding: '10px 8px' }}>{item.unidad || item.unit || '—'}</td>
+                            <td style={{ padding: '10px 8px' }}>{item.marca || item.brand || '—'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
           {expandedTickets.length>0 && (
             <div className="card" style={{marginTop:12}}>
               <h4>Historial</h4>

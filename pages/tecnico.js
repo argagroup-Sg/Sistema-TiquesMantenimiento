@@ -114,14 +114,14 @@ export default function Tecnico(){
     <div className="container">
       <div className="card">
         <h2>Panel Técnico</h2>
-        <div style={{display:'flex',gap:8,alignItems:'center',marginBottom:12}}>
-          <div style={{display:'flex',gap:6}}>
+        <div style={{display:'flex',gap:8,alignItems:'center',marginBottom:12, overflowX:'auto', overflowY:'hidden', WebkitOverflowScrolling:'touch'}}>
+          <div style={{display:'flex',gap:6, whiteSpace:'nowrap', flexShrink:0}}>
             <button className={viewTab==='mis' ? 'tab-active' : 'tab'} onClick={()=>setViewTab('mis')}>Mis Tiques</button>
             <button className={viewTab==='resueltos' ? 'tab-active' : 'tab'} onClick={()=>setViewTab('resueltos')}>Resueltos</button>
             <button className={viewTab==='escalados' ? 'tab-active' : 'tab'} onClick={()=>setViewTab('escalados')}>Escalados</button>
             <button className={viewTab==='todos' ? 'tab-active' : 'tab'} onClick={()=>setViewTab('todos')}>Todos</button>
           </div>
-          <div style={{marginLeft:'auto',display:'flex',gap:8,alignItems:'center'}}>
+          <div style={{marginLeft:'auto',display:'flex',gap:8,alignItems:'center', whiteSpace:'nowrap', flexShrink:0}}>
             <input placeholder="Buscar..." value={query} onChange={e=>setQuery(e.target.value)} style={{padding:8,borderRadius:8,border:'1px solid #e6eef8'}} />
             <select value={sortMode} onChange={e=>setSortMode(e.target.value)} style={{padding:8,borderRadius:8}}>
               <option value="fecha_desc">Fecha: más reciente</option>
@@ -207,7 +207,7 @@ export default function Tecnico(){
         <h3>Escalados / Servidores Externos</h3>
         <div className="spreadsheetTableRoot" style={{overflowX:'auto'}}>
           <table className="fixedTable" style={{width:'100%',borderCollapse:'collapse',minWidth:800}}>
-            <thead><tr><th>ID Tique</th><th>Fecha Escalado</th><th>Proveedor</th><th>Estado</th><th>Responsable</th><th>Nota</th><th>Observaciones</th></tr></thead>
+            <thead><tr><th>ID Tique</th><th>Fecha Escalado</th><th>Proveedor</th><th>Estado</th><th>Responsable</th><th>Nota</th><th>Observaciones</th><th>Historial</th></tr></thead>
             <tbody>
               {escalados.length===0 && <tr><td colSpan={7}>No hay registros de escalado.</td></tr>}
               {escalados.map(e=> (
