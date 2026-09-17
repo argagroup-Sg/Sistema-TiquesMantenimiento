@@ -700,7 +700,6 @@ export default function Admin(){
                   <div><strong>Motivo:</strong> <span>{selectedTicketInfo.descripcion || '—'}</span></div>
                   <div><strong>Estado:</strong> <span>{selectedTicketInfo.estado || '—'}</span></div>
                   <div><strong>Área:</strong> <span>{selectedTicketInfo.area || '—'}</span></div>
-                  <div><strong>Tipo de material:</strong> <span>{selectedTicketInfo.tipo_material || '—'}</span></div>
                   <div><strong>Urgencia:</strong> <span>{selectedTicketInfo.urgencia || '—'}</span></div>
                   <div><strong>Solicitante:</strong> <span>{selectedTicketInfo.solicitante || '—'}</span></div>
                   <div><strong>Técnico:</strong> <span>{selectedTicketInfo.tecnico || '—'}</span></div>
