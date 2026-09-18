@@ -1,11 +1,43 @@
 const db = require('../../../lib/db');
 
+function sanitize(s){return String(s||'').trim();}
+
+function buildEscaladoNota(notaBase){
+  const nota = sanitize(notaBase);
+  return nota || 'Escalado';
+}
+
+function buildHistorialDetalle(notaBase, observacionesBase, proveedorNombre){
+  const nota = sanitize(notaBase);
+  const observaciones = sanitize(observacionesBase);
+  const proveedor = sanitize(proveedorNombre);
+  const parts = [];
+  if (nota) parts.push(`Nota: ${nota}`);
+  if (proveedor) parts.push(`Proveedor: ${proveedor}`);
+  if (observaciones) parts.push(`Observaciones: ${observaciones}`);
+  return parts.join(' | ');
+}
+
 async function handler(req,res){
   const { id } = req.query || {};
   if(!id) return res.status(400).json({ error: 'Id requerido' });
 
   if(req.method==='GET'){
-    const r = await db.query('SELECT * FROM escalados WHERE id=$1', [id]);
+    const r = await db.query(`
+      SELECT e.*,
+        u_solicitante.nombre AS solicitante_nombre,
+        a.nombre AS area_nombre,
+        m.nombre AS maquina_nombre,
+        p.nombre AS proveedor_nombre,
+        u_responsable.nombre AS responsable_nombre
+      FROM escalados e
+      LEFT JOIN users u_solicitante ON u_solicitante.id = e.solicitante_id
+      LEFT JOIN areas a ON a.id = e.area_id
+      LEFT JOIN maquinas m ON m.id = e.maquina_id
+      LEFT JOIN proveedores p ON p.id = e.proveedor_id
+      LEFT JOIN users u_responsable ON u_responsable.id = e.responsable_id
+      WHERE e.id=$1
+    `, [id]);
     return res.json({ escalado: r.rows[0] });
   }
 
@@ -14,8 +46,7 @@ async function handler(req,res){
     const user = await getUserFromReq(req);
     if (!requireRole(user, ['admin','tecnico'])) return res.status(403).json({ error: 'No autorizado' });
 
-    const { estado, proveedor, responsable, nota, observaciones } = req.body || {};
-    // obtener la fila actual de escalado
+    const { estado, proveedor, proveedor_id, responsable, responsable_id, nota, observaciones, descripcion } = req.body || {};
     const sel = await db.query('SELECT * FROM escalados WHERE id=$1', [id]);
     const row = sel.rows[0];
     if(!row) return res.status(404).json({ error: 'Escalado no encontrado' });
@@ -23,15 +54,16 @@ async function handler(req,res){
     const fields = [];
     const vals = [];
     let idx = 1;
-    if(proveedor!==undefined){ fields.push(`proveedor=$${idx++}`); vals.push(proveedor); }
+    if(proveedor_id!==undefined){ fields.push(`proveedor_id=$${idx++}`); vals.push(proveedor_id ? Number(proveedor_id) : null); }
     if(estado!==undefined){ fields.push(`estado=$${idx++}`); vals.push(estado); }
-    if(responsable!==undefined){ fields.push(`responsable=$${idx++}`); vals.push(responsable); }
-    if(nota!==undefined){ fields.push(`nota=$${idx++}`); vals.push(nota); }
+    if(responsable_id!==undefined){ fields.push(`responsable_id=$${idx++}`); vals.push(responsable_id ? Number(responsable_id) : null); }
+    if(descripcion!==undefined){ fields.push(`descripcion=$${idx++}`); vals.push(descripcion); }
+    if(nota!==undefined){
+      const nextNota = buildEscaladoNota(nota);
+      fields.push(`nota=$${idx++}`); vals.push(nextNota);
+    }
     if(observaciones!==undefined){ fields.push(`observaciones=$${idx++}`); vals.push(observaciones); }
-    // Evitar sobreescribir los campos snapshot del ticket original (solicitante, area, maquina, urgencia, descripcion)
-    // Permitir solo editar campos específicos de escalado: proveedor, estado, responsable, nota, observaciones
 
-    // agregar marcas de tiempo en la primera transición
     if(estado!==undefined){
       const s = String(estado).toLowerCase();
       if(s === 'en proceso' && !row.fecha_en_proceso) fields.push('fecha_en_proceso=now()');
@@ -48,27 +80,27 @@ async function handler(req,res){
       const updatedEscalado = up.rows[0];
 
       const historialInserted = [];
-      // Si `estado` cambió a estados importantes, añadir una entrada de historial (sin modificar ticket aquí)
       if(estado!==undefined){
         const s = String(estado).toLowerCase();
         const ticketId = row.ticket_id;
         if(ticketId){
-            if(s === 'en proceso'){
-              // NO modificar la tabla `tickets` aquí. Solo insertar historial para trazabilidad.
-              console.log('escalados/[id] - inserting historial En Proceso (no ticket update)', ticketId, user?.email || user?.name, nota);
-              const h = await db.query('INSERT INTO historial(ticket_id, accion, estado, usuario, detalle) VALUES($1,$2,$3,$4,$5) RETURNING *', [ticketId, 'Proveedor '+ proveedor +': En Proceso', 'En Proceso', user?.email || user?.name || 'Proveedor', 'Not: '+ nota  + 'Obs: '+ observaciones || '']);
-              historialInserted.push(...h.rows);
-            }
-            if(s === 'en espera'){
-              console.log('escalados/[id] - inserting historial En Espera (no ticket update)', ticketId, user?.email || user?.name, nota);
-              const h = await db.query('INSERT INTO historial(ticket_id, accion, estado, usuario, detalle) VALUES($1,$2,$3,$4,$5) RETURNING *', [ticketId, 'Proveedor '+ proveedor +': En Espera', 'En Espera', user?.email || user?.name || 'Proveedor', 'Not: '+ nota  + 'Obs: '+ observaciones || '']);
-              historialInserted.push(...h.rows);
-            }
-            if(s === 'resuelto'){
-              console.log('escalados/[id] - inserting historial Resuelto (no ticket update)', ticketId, user?.email || user?.name, nota);
-              const h = await db.query('INSERT INTO historial(ticket_id, accion, estado, usuario, detalle) VALUES($1,$2,$3,$4,$5) RETURNING *', [ticketId, 'Proveedor '+ proveedor +': Resuelto', 'Resuelto', user?.email || user?.name || 'Proveedor', 'Not: '+ nota  + 'Obs: '+ observaciones || '']);
-              historialInserted.push(...h.rows);
-            }
+          const detalle = buildHistorialDetalle(
+            nota !== undefined ? nota : row.nota,
+            observaciones !== undefined ? observaciones : row.observaciones,
+            proveedor || row.proveedor_nombre || row.proveedor || ''
+          );
+          if(s === 'en proceso'){
+            const h = await db.query('INSERT INTO historial(ticket_id, accion, estado, usuario, detalle) VALUES($1,$2,$3,$4,$5) RETURNING *', [ticketId, 'Proveedor '+ String(proveedor || row.proveedor || 'Proveedor') +': En Proceso', 'En Proceso', user?.email || user?.name || 'Proveedor', detalle]);
+            historialInserted.push(...h.rows);
+          }
+          if(s === 'en espera'){
+            const h = await db.query('INSERT INTO historial(ticket_id, accion, estado, usuario, detalle) VALUES($1,$2,$3,$4,$5) RETURNING *', [ticketId, 'Proveedor '+ String(proveedor || row.proveedor || 'Proveedor') +': En Espera', 'En Espera', user?.email || user?.name || 'Proveedor', detalle]);
+            historialInserted.push(...h.rows);
+          }
+          if(s === 'resuelto'){
+            const h = await db.query('INSERT INTO historial(ticket_id, accion, estado, usuario, detalle) VALUES($1,$2,$3,$4,$5) RETURNING *', [ticketId, 'Proveedor '+ String(proveedor || row.proveedor || 'Proveedor') +': Resuelto', 'Resuelto', user?.email || user?.name || 'Proveedor', detalle]);
+            historialInserted.push(...h.rows);
+          }
         }
       }
 

@@ -362,6 +362,13 @@ tbody tr:nth-child(even){background:rgba(15,23,42,0.02)}
   border: 1px solid #fca5a5;
 }
 
+/* Estado: Escalado / Urgente */
+.badge.escalado-a-servidor-externo, 
+.badge.escalado {
+  background-color: #fee2e2; /* Rojo claro */
+  color: #b91c1c;            /* Texto rojo oscuro */
+  border: 1px solid #fca5a5;
+}
 /* Estado: Resuelto / Terminado / Cerrado */
 .badge.resuelto, 
 .badge.cerrado, 

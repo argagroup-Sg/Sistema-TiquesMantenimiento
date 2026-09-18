@@ -41,21 +41,21 @@ function ReportByUrgencia({ tickets }){
 
 function ReportByArea({ tickets }){
   const counts = {};
-  (tickets||[]).forEach(t=> counts[t.area || 'Sin área'] = (counts[t.area || 'Sin área']||0)+1);
+  (tickets||[]).forEach(t=> counts[(t.area_nombre || t.area || 'Sin área')] = (counts[(t.area_nombre || t.area || 'Sin área')]||0)+1);
   const entries = Object.entries(counts).sort((a,b)=>b[1]-a[1]).slice(0,10).map(e=>({ label:e[0], value:e[1] }));
   return (<div><BarChart data={entries} color="#7c3aed" /><ol>{entries.map(e=> <li key={e.label}>{e.label}: {e.value}</li>)}</ol></div>)
 }
 
 function ReportEscalados({ escalados }){
   const counts = {};
-  (escalados||[]).forEach(e=> counts[e.proveedor || 'Sin proveedor'] = (counts[e.proveedor || 'Sin proveedor']||0)+1);
+  (escalados||[]).forEach(e=> counts[(e.proveedor_nombre || e.proveedor || 'Sin proveedor')] = (counts[(e.proveedor_nombre || e.proveedor || 'Sin proveedor')]||0)+1);
   const data = Object.keys(counts).map(k=>({ label:k, value:counts[k] }));
   return (<div><BarChart data={data} color="#ef4444" /><ul>{data.map(d=> <li key={d.label}><strong>{d.label}:</strong> {d.value}</li>)}</ul></div>)
 }
 
 function ReportByTecnico({ tickets }){
   const counts = {};
-  (tickets||[]).forEach(t=> counts[t.tecnico || 'Sin asignar'] = (counts[t.tecnico || 'Sin asignar']||0)+1);
+  (tickets||[]).forEach(t=> counts[(t.tecnico_nombre || t.tecnico_email || t.tecnico || 'Sin asignar')] = (counts[(t.tecnico_nombre || t.tecnico_email || t.tecnico || 'Sin asignar')]||0)+1);
   const data = Object.keys(counts).map(k=>({ label:k, value:counts[k] }));
   return (<div><BarChart data={data} color="#f59e0b" /><ul>{data.map(d=> <li key={d.label}><strong>{d.label}:</strong> {d.value}</li>)}</ul></div>)
 }
@@ -96,7 +96,18 @@ function downloadXLS(rows, filename){
   const a = document.createElement('a'); a.href = url; a.download = filename; a.click(); URL.revokeObjectURL(url);
 }
 
+function resolveTicketName(ticket, preferredField, fallbackIdField, fallbackField) {
+  const value = ticket?.[preferredField] || ticket?.[fallbackField] || '';
+  if (value) return value;
+  const fallbackValue = ticket?.[fallbackIdField];
+  return fallbackValue !== undefined && fallbackValue !== null && fallbackValue !== '' ? String(fallbackValue) : '';
+}
+
 export default function Admin(){
+  function buildEscaladoNota(notaBase){
+    const trimmed = (notaBase || '').trim();
+    return trimmed || 'Escalado';
+  }
   const { data: session, status } = useSession();
   const router = useRouter();
   const [showMenu, setShowMenu] = useState(false);
@@ -137,12 +148,13 @@ export default function Admin(){
   const [expandedTickets, setExpandedTickets] = useState([]);
   const [expandedEscalados, setExpandedEscalados] = useState([]);
   const [selectedTicketInfo, setSelectedTicketInfo] = useState(null);
+  const [selectedEscaladoInfo, setSelectedEscaladoInfo] = useState(null);
   const [adminTab, setAdminTab] = useState('tiques');
   const [ticketSort, setTicketSort] = useState('fecha_desc');
   const [ticketQuery, setTicketQuery] = useState('');
   const [reportPage, setReportPage] = useState(1);
   const [reportPageSize, setReportPageSize] = useState(10);
-  const { openPrompt, openConfirm } = useDialog();
+  const { openPrompt, openConfirm, openSelect } = useDialog();
 
   // filtro centralizado usado por el calendario, la tabla y las exportaciones
   function getFilteredTickets({ ticketsList = tickets, view = calendarView, date = calendarDate, tecnico = calendarTecnico, onlyAvailable = calendarOnlyAvailable }){
@@ -252,6 +264,24 @@ export default function Admin(){
     setSelectedTicketInfo(null);
   }
 
+  function openEscaladoInfo(escalado){
+    if(!escalado) return;
+    setSelectedEscaladoInfo(escalado);
+  }
+
+  function getEscaladoStateDate(escalado){
+    if(!escalado) return null;
+    const estado = (escalado.estado || '').toString().toLowerCase();
+    if(estado.includes('resuelto')) return escalado.fecha_resuelto || escalado.fecha_escalado || null;
+    if(estado.includes('espera')) return escalado.fecha_en_espera || escalado.fecha_escalado || null;
+    if(estado.includes('proceso')) return escalado.fecha_en_proceso || escalado.fecha_escalado || null;
+    return escalado.fecha_escalado || null;
+  }
+
+  function closeEscaladoInfo(){
+    setSelectedEscaladoInfo(null);
+  }
+
   async function guardarTicketAdmin(id){
     const ok = await openConfirm('Guardar cambios en el ticket?');
     if(!ok) return;
@@ -269,18 +299,29 @@ export default function Admin(){
         descripcion: t.descripcion || '',
         nota: combinedNota,
         area: t.area || '',
+        area_id: t.area_id !== undefined && t.area_id !== null && t.area_id !== '' ? Number(t.area_id) : null,
         maquina: t.maquina || '',
+        maquina_id: t.maquina_id !== undefined && t.maquina_id !== null && t.maquina_id !== '' ? Number(t.maquina_id) : null,
         estado: t.estado || '',
-        tecnico: t.tecnico || ''
+        tecnico: t.tecnico || '',
+        tecnico_id: t.tecnico_id !== undefined && t.tecnico_id !== null && t.tecnico_id !== '' ? Number(t.tecnico_id) : null
       };
       // Si el estado cambiado es Escalado a Servidor Externo, crear un escalado en vez de sobrescribir el ticket
       if((payload.estado||'').toString().toLowerCase().includes('escalad')){
-        const proveedor = await openPrompt('Proveedor externo (nombre):', '');
-        if(!proveedor) throw new Error('Proveedor requerido para escalado');
+        if(!proveedores || proveedores.length===0) throw new Error('No hay proveedores registrados');
+        const proveedorSeleccionado = await openSelect(
+          'Selecciona el proveedor para el escalado:',
+          proveedores.map(p => ({ value: String(p.id), label: p.nombre || 'Sin nombre' })),
+          'Proveedor'
+        );
+        if(!proveedorSeleccionado) throw new Error('Proveedor requerido para escalado');
+        const proveedor = (proveedores||[]).find(p => String(p.id) === String(proveedorSeleccionado))?.nombre || 'Sin proveedor';
         const okEsc = await openConfirm('Confirmar escalado a proveedor: ' + proveedor + '?');
         if(!okEsc) return;
-        const responsable = (session?.user?.nombre) || (session?.user?.email) || '';
-        await api('/escalados', { method:'POST', body: JSON.stringify({ ticket_id: id, proveedor, nota: combinedNota, responsable }) });
+        const responsableNombre = (session?.user?.nombre) || (session?.user?.email) || '';
+        const responsableId = session?.user?.id || session?.user?.sub || null;
+        const notaFinal = buildEscaladoNota(notaInput || combinedNota);
+        await api('/escalados', { method:'POST', body: JSON.stringify({ ticket_id: id, proveedor, proveedor_id: Number(proveedorSeleccionado), nota: notaFinal, responsable: responsableNombre, responsable_id: responsableId ? Number(responsableId) : null }) });
         await loadAll();
         showToast('Ticket escalado y guardado', 'success');
       } else {
@@ -308,24 +349,33 @@ export default function Admin(){
   async function guardarEscalado(id){
     try{
       showToast('Guardando escalado...', 'info');
-      console.log('guardarEscalado start', id, escaladosEdit[id]);
-      // usar valores editados si están presentes
       const row = (escalados || []).find(x=> String(x.id) === String(id)) || {};
       const ed = escaladosEdit[String(id)] || {};
-      const proveedor = (ed.proveedor !== undefined) ? ed.proveedor : (row.proveedor || '');
+
+      const proveedorId = (ed.proveedor_id !== undefined) ? ed.proveedor_id : (row.proveedor_id !== undefined && row.proveedor_id !== null && row.proveedor_id !== '') ? Number(row.proveedor_id) : null;
+      const responsableId = (ed.responsable_id !== undefined) ? ed.responsable_id : (row.responsable_id !== undefined && row.responsable_id !== null && row.responsable_id !== '') ? Number(row.responsable_id) : null;
+      const proveedor = (ed.proveedor !== undefined) ? ed.proveedor : (row.proveedor_nombre || row.proveedor || 'Sin proveedor');
       const estado = (ed.estado !== undefined) ? ed.estado : (row.estado || '');
-      const responsable = (ed.responsable !== undefined) ? ed.responsable : (row.responsable || '');
-      const nota = (ed.nota !== undefined) ? ed.nota : (row.nota || '');
+      const responsable = (ed.responsable !== undefined) ? ed.responsable : (row.responsable_nombre || row.responsable || '');
+      const notaOriginal = (ed.nota !== undefined) ? ed.nota : (row.nota || '');
+      const descripcion = (ed.descripcion !== undefined) ? ed.descripcion : (row.descripcion || '');
+      const nota = buildEscaladoNota(notaOriginal);
       const observaciones = (ed.observaciones !== undefined) ? ed.observaciones : (row.observaciones || '');
-      // encontrar id del ticket para este escalado para invalidar la caché de historial
       const ticketId = row.ticket_id;
-      const res = await api('/escalados/'+id, { method:'PUT', body: JSON.stringify({ proveedor, estado, responsable, nota, observaciones }) });
-      console.log('guardarEscalado response', res);
-      // borrar caché de edición para esta fila
+
+      const res = await api('/escalados/'+id, { method:'PUT', body: JSON.stringify({
+        proveedor,
+        proveedor_id: proveedorId,
+        estado,
+        responsable,
+        responsable_id: responsableId,
+        nota,
+        descripcion,
+        observaciones
+      }) });
+
       setEscaladosEdit(prev => { const c = { ...prev }; delete c[String(id)]; return c; });
-      // refrescar listas
       await loadAll();
-      // obtener y actualizar el historial en caché para el ticket relacionado, de modo que la UI muestre las entradas más recientes de inmediato
       if(ticketId){
         try{
           const rh = await api('/historial?ticket_id='+encodeURIComponent(String(ticketId)));
@@ -344,8 +394,14 @@ export default function Admin(){
   }
 
   async function escalarTicket(id){
-    const proveedor = await openPrompt('Proveedor externo (nombre):', '');
-    if(!proveedor) return;
+    if(!proveedores || proveedores.length===0) return showToast('No hay proveedores registrados', 'error');
+    const proveedorIdSeleccionado = await openSelect(
+      'Selecciona el proveedor para el escalado:',
+      proveedores.map(p => ({ value: String(p.id), label: p.nombre || 'Sin nombre' })),
+      'Proveedor'
+    );
+    if(!proveedorIdSeleccionado) return;
+    const proveedor = (proveedores||[]).find(p => String(p.id) === String(proveedorIdSeleccionado))?.nombre || 'Sin proveedor';
     const nota = await openPrompt('Nota para el escalado (opcional):', '') || '';
     const ok = await openConfirm('Confirmar escalado a proveedor: ' + proveedor + '?');
     if(!ok) return;
@@ -353,7 +409,8 @@ export default function Admin(){
     setSavingIds(prev => Array.from(new Set(prev.concat([confirmarId]))));
     try{
       const responsable = (session?.user?.nombre) || (session?.user?.email) || '';
-      await api('/escalados', { method:'POST', body: JSON.stringify({ ticket_id: id, proveedor, nota, responsable }) });
+      const responsableId = session?.user?.id || session?.user?.sub || null;
+      await api('/escalados', { method:'POST', body: JSON.stringify({ ticket_id: id, proveedor, proveedor_id: Number(proveedorIdSeleccionado), nota: buildEscaladoNota(nota), responsable, responsable_id: responsableId ? Number(responsableId) : null }) });
       await loadAll();
       showToast('Ticket escalado', 'success');
     }catch(e){ console.error(e); showToast && showToast(e.message || String(e), 'error'); }
@@ -699,11 +756,11 @@ export default function Admin(){
                 <div style={{ display: 'grid', gap: 10, marginBottom: 18 }}>
                   <div><strong>Motivo:</strong> <span>{selectedTicketInfo.descripcion || '—'}</span></div>
                   <div><strong>Estado:</strong> <span>{selectedTicketInfo.estado || '—'}</span></div>
-                  <div><strong>Área:</strong> <span>{selectedTicketInfo.area || '—'}</span></div>
+                  <div><strong>Área:</strong> <span>{resolveTicketName(selectedTicketInfo, 'area_nombre', 'area_id', 'area') || '—'}</span></div>
                   <div><strong>Urgencia:</strong> <span>{selectedTicketInfo.urgencia || '—'}</span></div>
-                  <div><strong>Solicitante:</strong> <span>{selectedTicketInfo.solicitante || '—'}</span></div>
-                  <div><strong>Técnico:</strong> <span>{selectedTicketInfo.tecnico || '—'}</span></div>
-                  <div><strong>Máquina:</strong> <span>{selectedTicketInfo.maquina || '—'}</span></div>
+                  <div><strong>Solicitante:</strong> <span>{resolveTicketName(selectedTicketInfo, 'solicitante_nombre', 'solicitante_id', 'solicitante') || '—'}</span></div>
+                  <div><strong>Técnico:</strong> <span>{resolveTicketName(selectedTicketInfo, 'tecnico_nombre', 'tecnico_id', 'tecnico') || '—'}</span></div>
+                  <div><strong>Máquina:</strong> <span>{resolveTicketName(selectedTicketInfo, 'maquina_nombre', 'maquina_id', 'maquina') || '—'}</span></div>
                   <div><strong>Fecha creación:</strong> <span>{selectedTicketInfo.fecha_creacion ? formatDate(selectedTicketInfo.fecha_creacion) : '—'}</span></div>
                   <div><strong>Fecha asignación:</strong> <span>{selectedTicketInfo.fecha_asignacion ? formatDate(selectedTicketInfo.fecha_asignacion) : '—'}</span></div>
                   <div><strong>Fecha en proceso:</strong> <span>{selectedTicketInfo.fecha_en_proceso ? formatDate(selectedTicketInfo.fecha_en_proceso) : '—'}</span></div>
@@ -991,6 +1048,9 @@ export default function Admin(){
                       <th style={{padding:8}}>Fecha En Proceso</th>
                       <th style={{padding:8}}>Fecha En Espera</th>
                       <th style={{padding:8}}>Fecha Resuelto</th>
+                      <th style={{padding:8}}>Área</th>
+                      <th style={{padding:8}}>Maquinaria</th>
+                      <th style={{padding:8}}>Motivo</th>
                       <th style={{padding:8}}>Proveedor</th>
                       <th style={{padding:8}}>Estado</th>
                       <th style={{padding:8}}>Responsable</th>
@@ -1009,15 +1069,46 @@ export default function Admin(){
                           <td style={{padding:8}}>{e.fecha_en_proceso ? formatDate(e.fecha_en_proceso) : ''}</td>
                           <td style={{padding:8}}>{e.fecha_en_espera ? formatDate(e.fecha_en_espera) : ''}</td>
                           <td style={{padding:8}}>{e.fecha_resuelto ? formatDate(e.fecha_resuelto) : ''}</td>
+                          <td style={{padding:8}}>{e.area_nombre || e.area || ''}</td>
+                          <td style={{padding:8}}>{e.maquina_nombre || e.maquina || ''}</td>
                           <td style={{padding:8}}>
                             {(()=>{
                               const isResolved = ((e.estado||'')+'').toString().toLowerCase().includes('resuelto');
                               const locked = isResolved;
                               return (
-                                <select disabled={locked} value={(escaladosEdit[e.id] && escaladosEdit[e.id].proveedor) ?? (e.proveedor || '')} onChange={ev=> setEscaladosEdit(prev=> ({ ...prev, [e.id]: { ...(prev[e.id]||{}), proveedor: ev.target.value } }))}>
+                                <input disabled={locked} value={(escaladosEdit[e.id] && escaladosEdit[e.id].descripcion) ?? (e.descripcion || '')} onChange={ev=> setEscaladosEdit(prev=> ({ ...prev, [e.id]: { ...(prev[e.id]||{}), descripcion: ev.target.value } }))} />
+                              )
+                            })()}
+                          </td>
+                          <td style={{padding:8}}>
+                            {(()=>{
+                              const isResolved = ((e.estado||'')+'').toString().toLowerCase().includes('resuelto');
+                              const locked = isResolved;
+                              const selectedProveedorId = (() => {
+                                const value = (escaladosEdit[e.id] && escaladosEdit[e.id].proveedor_id !== undefined) ? escaladosEdit[e.id].proveedor_id : e.proveedor_id;
+                                if (value !== undefined && value !== null && value !== '') return String(value);
+                                const target = (proveedores||[]).find(p => String(p.nombre) === String(e.proveedor_nombre || e.proveedor || ''));
+                                return target ? String(target.id) : '';
+                              })();
+                              return (
+                                <select
+                                  disabled={locked}
+                                  value={selectedProveedorId}
+                                  onChange={ev => {
+                                    const chosen = (proveedores||[]).find(p => String(p.id) === String(ev.target.value));
+                                    setEscaladosEdit(prev => ({
+                                      ...prev,
+                                      [e.id]: {
+                                        ...(prev[e.id]||{}),
+                                        proveedor_id: chosen ? Number(chosen.id) : null,
+                                        proveedor: chosen ? chosen.nombre : ''
+                                      }
+                                    }));
+                                  }}
+                                >
                                   <option value="">-- Seleccionar proveedor --</option>
                                   {(proveedores||[]).map(p=> (
-                                    <option key={p.id} value={p.nombre}>{p.nombre}</option>
+                                    <option key={p.id} value={String(p.id)}>{p.nombre}</option>
                                   ))}
                                 </select>
                               )
@@ -1041,13 +1132,33 @@ export default function Admin(){
                             {(()=>{
                               const isResolved = ((e.estado||'')+'').toString().toLowerCase().includes('resuelto');
                               const locked = isResolved;
+                              const selectedResponsableId = (() => {
+                                const value = (escaladosEdit[e.id] && escaladosEdit[e.id].responsable_id !== undefined) ? escaladosEdit[e.id].responsable_id : e.responsable_id;
+                                if (value !== undefined && value !== null && value !== '') return String(value);
+                                const target = (usuarios||[]).find(u => String(u.nombre || u.email || u.id) === String(e.responsable_nombre || e.responsable || ''));
+                                return target ? String(target.id) : '';
+                              })();
                               return (
-                                <select disabled={locked} value={(escaladosEdit[e.id] && escaladosEdit[e.id].responsable) ?? (e.responsable || '')} onChange={ev=> setEscaladosEdit(prev=> ({ ...prev, [e.id]: { ...(prev[e.id]||{}), responsable: ev.target.value } }))}>
+                                <select
+                                  disabled={locked}
+                                  value={selectedResponsableId}
+                                  onChange={ev => {
+                                    const chosen = (usuarios||[]).find(u => String(u.id) === String(ev.target.value));
+                                    setEscaladosEdit(prev => ({
+                                      ...prev,
+                                      [e.id]: {
+                                        ...(prev[e.id]||{}),
+                                        responsable_id: chosen ? Number(chosen.id) : null,
+                                        responsable: chosen ? (chosen.nombre || chosen.email || '') : ''
+                                      }
+                                    }));
+                                  }}
+                                >
                                   <option value="">-- Seleccionar responsable --</option>
                                   {(usuarios||[]).filter(u=> {
                                     const r = ((u.rol||u.role||'')+'').toString().toLowerCase(); return r === 'tecnico' || r === 'admin';
                                   }).map(u=> (
-                                    <option key={u.id} value={u.nombre || u.email || u.id}>{u.nombre || u.email}</option>
+                                    <option key={u.id} value={String(u.id)}>{u.nombre || u.email}</option>
                                   ))}
                                 </select>
                               )
@@ -1080,6 +1191,7 @@ export default function Admin(){
                                   <button type="button" onClick={()=>guardarEscalado(e.id)} className="btn-success" disabled={locked}>Guardar</button>
                                   <button type="button" onClick={()=>eliminarEscalado(e.id)} className="btn-danger" style={{marginLeft:8}} disabled={locked}>Eliminar</button>
                                   <button type="button" onClick={()=> toggleHistEsc && toggleHistEsc(e.ticket_id)} className="btn-secondary" style={{marginLeft:8}}>Historial</button>
+                                  <button type="button" onClick={()=>openEscaladoInfo(e)} className="btn-secondary" style={{marginLeft:8}}>Info</button>
                                 </>
                               )
                             })()}
@@ -1104,6 +1216,30 @@ export default function Admin(){
                   </tbody>
                 </table>
               </div>
+              {selectedEscaladoInfo && (
+                <div style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.18)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 2001, padding: 20 }} onClick={closeEscaladoInfo}>
+                  <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 18, padding: 20, width: 'min(760px, 92vw)', maxHeight: '82vh', overflowY: 'auto', boxShadow: '0 30px 60px rgba(15, 23, 42, 0.22)' }}>
+                    <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:12 }}>
+                      <div style={{ fontSize: 18, fontWeight: 700, color: '#0f172a' }}>Detalle del escalado #{selectedEscaladoInfo.id || selectedEscaladoInfo.ticket_id || '—'}</div>
+                      <button onClick={closeEscaladoInfo} style={{ border: 'none', background: '#e2e8f0', color: '#0f172a', borderRadius: 8, padding: '8px 14px', cursor: 'pointer', fontWeight: 600 }}>Cerrar</button>
+                    </div>
+                    <div style={{ display:'grid', gap:10, color:'#0f172a' }}>
+                      <div><strong>Ticket:</strong> <span>{selectedEscaladoInfo.ticket_id || '—'}</span></div>
+                      <div><strong>Estado:</strong> <span>{selectedEscaladoInfo.estado || '—'}</span></div>
+                      <div><strong>Área:</strong> <span>{selectedEscaladoInfo.area_nombre || selectedEscaladoInfo.area || '—'}</span></div>
+                      <div><strong>Máquina:</strong> <span>{selectedEscaladoInfo.maquina_nombre || selectedEscaladoInfo.maquina || '—'}</span></div>
+                      <div><strong>Motivo:</strong> <span>{selectedEscaladoInfo.descripcion || '—'}</span></div>
+                      <div><strong>Proveedor:</strong> <span>{selectedEscaladoInfo.proveedor_nombre || selectedEscaladoInfo.proveedor || '—'}</span></div>
+                      <div><strong>Responsable:</strong> <span>{selectedEscaladoInfo.responsable_nombre || selectedEscaladoInfo.responsable || '—'}</span></div>
+                      <div><strong>Urgencia:</strong> <span>{selectedEscaladoInfo.urgencia || '—'}</span></div>
+                      <div><strong>Fecha escalado:</strong> <span>{selectedEscaladoInfo.fecha_escalado ? formatDate(selectedEscaladoInfo.fecha_escalado) : '—'}</span></div>
+                      <div><strong>Fecha estado:</strong> <span>{getEscaladoStateDate(selectedEscaladoInfo) ? formatDate(getEscaladoStateDate(selectedEscaladoInfo)) : '—'}</span></div>
+                      <div><strong>Nota:</strong> <span>{selectedEscaladoInfo.nota || '—'}</span></div>
+                      <div><strong>Observaciones:</strong> <span>{selectedEscaladoInfo.observaciones || '—'}</span></div>
+                    </div>
+                  </div>
+                </div>
+              )}
         </div>
       )}
 
@@ -1196,12 +1332,12 @@ export default function Admin(){
                         <tr key={t.id}>
                           <td>{t.id}</td>
                           <td>{formatDate(t.fecha_creacion||t.fecha||t.fecha_creacion)}</td>
-                          <td>{t.solicitante||t.usuario||''}</td>
-                          <td>{t.area||''}</td>
-                          <td>{t.maquina||''}</td>
+                          <td>{resolveTicketName(t, 'solicitante_nombre', 'solicitante_id', 'solicitante') || t.usuario || ''}</td>
+                          <td>{resolveTicketName(t, 'area_nombre', 'area_id', 'area') || ''}</td>
+                          <td>{resolveTicketName(t, 'maquina_nombre', 'maquina_id', 'maquina') || ''}</td>
                           <td>{t.urgencia||''}</td>
                           <td>{t.estado||''}</td>
-                          <td>{t.tecnico||''}</td>
+                          <td>{resolveTicketName(t, 'tecnico_nombre', 'tecnico_id', 'tecnico') || ''}</td>
                         </tr>
                       ))
                     })()}
@@ -1248,8 +1384,8 @@ export default function Admin(){
               </label>
             </div>
             <div style={{marginLeft:'auto'}} className="report-actions">
-              <button onClick={()=>{ const rows = (filteredTickets||[]).map(t=>({ id:t.id, fecha:t.fecha_creacion||t.fecha, solicitante:t.solicitante, area:t.area, maquina:t.maquina, urgencia:t.urgencia, estado:t.estado, tecnico:t.tecnico })); downloadCSV(rows, 'calendario-tiques.csv'); }}>Exportar visibles CSV</button>
-              <button onClick={()=>{ const rows = (filteredTickets||[]).map(t=>({ id:t.id, fecha:t.fecha_creacion||t.fecha, solicitante:t.solicitante, area:t.area, maquina:t.maquina, urgencia:t.urgencia, estado:t.estado, tecnico:t.tecnico })); downloadXLS(rows, 'calendario-tiques.xls'); }}>Exportar visibles XLS</button>
+              <button onClick={()=>{ const rows = (filteredTickets||[]).map(t=>({ id:t.id, fecha:t.fecha_creacion||t.fecha, solicitante: resolveTicketName(t, 'solicitante_nombre', 'solicitante_id', 'solicitante'), area: resolveTicketName(t, 'area_nombre', 'area_id', 'area'), maquina: resolveTicketName(t, 'maquina_nombre', 'maquina_id', 'maquina'), urgencia:t.urgencia, estado:t.estado, tecnico: resolveTicketName(t, 'tecnico_nombre', 'tecnico_id', 'tecnico') })); downloadCSV(rows, 'calendario-tiques.csv'); }}>Exportar visibles CSV</button>
+              <button onClick={()=>{ const rows = (filteredTickets||[]).map(t=>({ id:t.id, fecha:t.fecha_creacion||t.fecha, solicitante: resolveTicketName(t, 'solicitante_nombre', 'solicitante_id', 'solicitante'), area: resolveTicketName(t, 'area_nombre', 'area_id', 'area'), maquina: resolveTicketName(t, 'maquina_nombre', 'maquina_id', 'maquina'), urgencia:t.urgencia, estado:t.estado, tecnico: resolveTicketName(t, 'tecnico_nombre', 'tecnico_id', 'tecnico') })); downloadXLS(rows, 'calendario-tiques.xls'); }}>Exportar visibles XLS</button>
             </div>
           </div>
           <CalendarSchedule
@@ -1283,7 +1419,7 @@ export default function Admin(){
                     const start = (reportPage-1)*reportPageSize; const pageItems = (filteredTickets||[]).slice(start, start+reportPageSize);
                     if(pageItems.length===0) return (<tr><td colSpan={7}>No hay eventos para la selección.</td></tr>);
                     return pageItems.map(t=> (
-                      <tr key={t.id}><td>{t.id}</td><td>{formatDate(t.fecha_creacion||t.fecha||t.fecha_creacion)}</td><td>{t.solicitante||t.usuario||''}</td><td>{t.area||''}</td><td>{t.maquina||''}</td><td>{t.estado||''}</td><td>{t.tecnico||''}</td></tr>
+                      <tr key={t.id}><td>{t.id}</td><td>{formatDate(t.fecha_creacion||t.fecha||t.fecha_creacion)}</td><td>{resolveTicketName(t, 'solicitante_nombre', 'solicitante_id', 'solicitante') || t.usuario || ''}</td><td>{resolveTicketName(t, 'area_nombre', 'area_id', 'area') || ''}</td><td>{resolveTicketName(t, 'maquina_nombre', 'maquina_id', 'maquina') || ''}</td><td>{t.estado||''}</td><td>{resolveTicketName(t, 'tecnico_nombre', 'tecnico_id', 'tecnico') || ''}</td></tr>
                     ));
                   })()}
                 </tbody>

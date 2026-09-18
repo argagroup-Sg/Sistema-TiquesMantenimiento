@@ -16,19 +16,25 @@ export default function Home(){
   const [password, setPassword] = useState('');
   const [areas, setAreas] = useState([]);
   const [maquinas, setMaquinas] = useState([]);
-  const [form, setForm] = useState({ solicitante: '', area: '', maquina: '', urgencia: 'Baja', descripcion: '' });
+  const [form, setForm] = useState({ solicitante: '', solicitante_id: '', area_id: '', maquina_id: '', urgencia: 'Baja', descripcion: '' });
   const [tiques, setTiques] = useState([]);
 
   useEffect(()=>{ loadCatalogs() }, []);
 
   useEffect(()=>{
-    // si está autenticado, redirigir al panel específico según rol
     if(session){
       const role = ((session.user?.role || session.user?.rol || '') + '').toString().toLowerCase();
       if(role === 'admin') { router.replace('/admin'); return; }
       if(role === 'super') { router.replace('/super'); return; }
       if(role === 'tecnico') { router.replace('/tecnico'); return; }
       router.replace('/empleado');
+    }
+  }, [session]);
+
+  useEffect(() => {
+    if (session?.user) {
+      const userName = session.user.name || session.user.nombre || session.user.email || '';
+      setForm(prev => ({ ...prev, solicitante: userName, solicitante_id: session.user.id || session.user.sub || prev.solicitante_id || '' }));
     }
   }, [session]);
 
@@ -40,7 +46,6 @@ export default function Home(){
     if(!password) return showToast('Ingresa contraseña', 'error');
     const res = await signIn('credentials', { redirect: false, email, password });
     if(res?.error) return showToast(res.error || 'Error de autenticación', 'error');
-    // redirigir según rol sin recarga completa
     const session = await getSession();
     const role = ((session?.user?.role || session?.user?.rol || '') + '').toString().toLowerCase();
     if(role === 'admin') return router.replace('/admin');
@@ -50,17 +55,25 @@ export default function Home(){
   }
 
   async function loadCatalogs(){
-    const a = await api('/areas'); setAreas((a.areas||[]).map(x=>x.nombre));
-    const m = await api('/maquinas'); setMaquinas((m.maquinas||[]).map(x=>x.nombre));
-    const t = await api('/tickets'); setTiques(t.tiques||[]);
+    const a = await api('/areas'); setAreas(a.areas || []);
+    const m = await api('/maquinas'); setMaquinas(m.maquinas || []);
+    const t = await api('/tickets'); setTiques(t.tiques || []);
   }
 
   async function enviarReporte(e){
     e && e.preventDefault();
-    if(!form.solicitante||!form.area||!form.maquina||!form.descripcion) return showToast('Completa todos los campos.', 'error');
-    const r = await api('/tickets', { method: 'POST', body: JSON.stringify(form) });
+    if(!form.solicitante || !form.area_id || !form.maquina_id || !form.descripcion) return showToast('Completa todos los campos.', 'error');
+    const payload = {
+      ...form,
+      solicitante_id: form.solicitante_id || session?.user?.id || session?.user?.sub || '',
+      area_id: Number(form.area_id),
+      maquina_id: Number(form.maquina_id)
+    };
+    const r = await api('/tickets', { method: 'POST', body: JSON.stringify(payload) });
     if(r.error) return showToast(r.error, 'error');
-    showToast('Tique creado: ' + r.id, 'success'); setForm({ solicitante:'', area:'', maquina:'', urgencia:'Baja', descripcion:'' }); loadCatalogs();
+    showToast('Tique creado: ' + r.id, 'success');
+    setForm({ solicitante: session?.user?.name || session?.user?.nombre || session?.user?.email || '', solicitante_id: session?.user?.id || session?.user?.sub || '', area_id: '', maquina_id: '', urgencia: 'Baja', descripcion: '' });
+    loadCatalogs();
   }
 
   if(!session) {
@@ -68,28 +81,9 @@ export default function Home(){
       <div className="container" style={{maxWidth:520,margin:'60px auto'}}>
         <div className="card" style={{textAlign:'center'}}>
           <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:12}}>
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              padding: '10px',
-              background: '#ffffff', // Fondo blanco para que resalte el logo perfectamente
-              borderRadius: '12px',
-              width: 'fit-content'
-            }}>
-              <img
-                src="https://exportgagroup.com/wp-content/uploads/2023/02/350x100-logo-pag-hori-e1745438808154.png"
-                alt="Exportgagroup Prawn Exporter Logo"
-                style={{
-                  width: '100%',
-                  maxWidth: '350px', // Mantiene la resolución óptima original
-                  height: 'auto',
-                  objectFit: 'contain'
-                }}
-              />
+            <div style={{display:'flex',alignItems:'center',justifyContent:'center',padding:'10px',background:'#ffffff',borderRadius:'12px',width:'fit-content'}}>
+              <img src="https://exportgagroup.com/wp-content/uploads/2023/02/350x100-logo-pag-hori-e1745438808154.png" alt="Exportgagroup Prawn Exporter Logo" style={{width:'100%',maxWidth:'350px',height:'auto',objectFit:'contain'}} />
             </div>
-
-{/*         <div style={{width:80,height:80,borderRadius:12,background:'linear-gradient(135deg,#2563eb,#7c3aed)',display:'flex',alignItems:'center',justifyContent:'center',color:'#fff',fontWeight:700,fontSize:24}}>SM</div> */}            
             <h2 style={{margin:0}}>Sistema de Mantenimiento</h2>
             <p style={{margin:0,color:'#6b7280'}}>Inicia sesión con tu cuenta de empresa</p>
           </div>
@@ -119,11 +113,11 @@ export default function Home(){
       </div>
 
       <div className="card" style={{marginTop:12}}>
-        <h3> AE Reportar Falla</h3>
+        <h3>AE Reportar Falla</h3>
         <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
           <div>
             <label>Tu nombre</label>
-            <input value={form.solicitante} onChange={e=>setForm({...form,solicitante:e.target.value})} />
+            <input value={form.solicitante} readOnly style={{backgroundColor:'#f3f4f6', cursor:'not-allowed'}} />
           </div>
           <div>
             <label>Urgencia</label>
@@ -131,11 +125,11 @@ export default function Home(){
           </div>
           <div>
             <label>Área</label>
-            <select value={form.area} onChange={e=>setForm({...form,area:e.target.value})}><option value="">Seleccione</option>{areas.map(a=><option key={a}>{a}</option>)}</select>
+            <select value={form.area_id} onChange={e=>setForm({...form,area_id:e.target.value})}><option value="">Seleccione</option>{(areas||[]).map(a=><option key={a.id} value={a.id}>{a.nombre}</option>)}</select>
           </div>
           <div>
             <label>Máquina</label>
-            <select value={form.maquina} onChange={e=>setForm({...form,maquina:e.target.value})}><option value="">Seleccione</option>{maquinas.map(m=><option key={m}>{m}</option>)}</select>
+            <select value={form.maquina_id} onChange={e=>setForm({...form,maquina_id:e.target.value})}><option value="">Seleccione</option>{(maquinas||[]).map(m=><option key={m.id} value={m.id}>{m.nombre}</option>)}</select>
           </div>
         </div>
         <label>Descripción</label>
@@ -156,9 +150,9 @@ export default function Home(){
                   <tr key={t.id} style={{borderBottom:'1px solid #eee'}}>
                     <td><strong>{t.id}</strong></td>
                     <td>{formatDate(t.fecha_creacion || t.fecha)}</td>
-                    <td>{t.solicitante}</td>
-                    <td>{t.area}</td>
-                    <td>{t.maquina}</td>
+                    <td>{t.solicitante_nombre || t.solicitante}</td>
+                    <td>{t.area_nombre || t.area}</td>
+                    <td>{t.maquina_nombre || t.maquina}</td>
                     <td>{t.descripcion}</td>
                     <td>{t.urgencia}</td>
                     <td><span className={"badge " + statusClass(t.estado)}>{t.estado || 'Abierto'}</span></td>

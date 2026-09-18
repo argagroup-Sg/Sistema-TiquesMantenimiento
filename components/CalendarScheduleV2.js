@@ -38,6 +38,15 @@ function initials(name) {
   return `${first}${second}`.toUpperCase()
 }
 
+function getDisplayValue(item, ...keys){
+  if(!item) return '';
+  for(const key of keys){
+    const value = item[key];
+    if(value !== undefined && value !== null && value !== '') return String(value);
+  }
+  return '';
+}
+
 export default function CalendarScheduleV2({
   tecnicos = [],
   tickets = [],
@@ -247,11 +256,19 @@ export default function CalendarScheduleV2({
       {tooltip.visible && tooltip.data && (
         <div style={{ position: 'fixed', left: tooltip.x, top: tooltip.y, zIndex: 9999, width: 320, background: '#0f172a', color: '#fff', borderRadius: 10, boxShadow: '0 16px 32px rgba(2, 6, 23, 0.35)', padding: 12 }}>
           <div style={{ fontWeight: 800, marginBottom: 6 }}>Tique #{tooltip.data.id}</div>
-          <div style={{ fontSize: 12, opacity: 0.9 }}>{tooltip.data.solicitante || tooltip.data.usuario || 'Sin solicitante'}</div>
+          <div style={{ fontSize: 12, opacity: 0.9, marginBottom: 4 }}>{getDisplayValue(tooltip.data, 'solicitante_nombre', 'solicitante', 'usuario') || 'Sin solicitante'}</div>
+          <div style={{ fontSize: 12, opacity: 0.9, marginBottom: 4 }}>{getDisplayValue(tooltip.data, 'area_nombre', 'area') ? `Área: ${getDisplayValue(tooltip.data, 'area_nombre', 'area')}` : ''}</div>
+          <div style={{ fontSize: 12, opacity: 0.9, marginBottom: 4 }}>{getDisplayValue(tooltip.data, 'maquina_nombre', 'maquina') ? `Máquina: ${getDisplayValue(tooltip.data, 'maquina_nombre', 'maquina')}` : ''}</div>
           <div style={{ fontSize: 12, opacity: 0.8, marginTop: 6 }}>{tooltip.data.estado || 'Sin estado'}</div>
           <div style={{ fontSize: 11, opacity: 0.7, marginTop: 8 }}>
-            {tooltip.data.tecnico ? `Técnico: ${tooltip.data.tecnico}` : 'Sin técnico'}
+            {getDisplayValue(tooltip.data, 'tecnico_nombre', 'tecnico', 'tecnico_email') ? `Técnico: ${getDisplayValue(tooltip.data, 'tecnico_nombre', 'tecnico', 'tecnico_email')}` : 'Sin técnico'}
           </div>
+          {tooltip.data.escalado && (
+            <>
+              <div style={{ fontSize: 11, opacity: 0.7, marginTop: 6 }}>{getDisplayValue(tooltip.data.escalado, 'proveedor_nombre', 'proveedor') ? `Proveedor: ${getDisplayValue(tooltip.data.escalado, 'proveedor_nombre', 'proveedor')}` : ''}</div>
+              <div style={{ fontSize: 11, opacity: 0.7, marginTop: 2 }}>{getDisplayValue(tooltip.data.escalado, 'responsable_nombre', 'responsable') ? `Responsable: ${getDisplayValue(tooltip.data.escalado, 'responsable_nombre', 'responsable')}` : ''}</div>
+            </>
+          )}
           <div style={{ fontSize: 11, opacity: 0.7, marginTop: 6 }}>
             {tooltip.data.fecha_creacion ? `Inicio: ${formatDate(tooltip.data.fecha_creacion)}` : ''}
           </div>

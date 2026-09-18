@@ -63,6 +63,14 @@ function statusColor(status){
 }
 
 function initials(name){ if(!name) return ''; const parts = name.split(' '); return (parts[0][0]||'').toUpperCase() + (parts[1]? (parts[1][0]||'').toUpperCase() : ''); }
+function getDisplayValue(item, ...keys){
+  if(!item) return '';
+  for(const key of keys){
+    const value = item[key];
+    if(value !== undefined && value !== null && value !== '') return String(value);
+  }
+  return '';
+}
 
 export default function CalendarScheduleSimple({ tecnicos=[], tickets=[], view='month', currentDate=null, filterTecnico=null, onlyAvailable=false, escalados=[], onEventClick=null }){
   const date = parseLocalDate(currentDate || new Date());
@@ -385,10 +393,10 @@ export default function CalendarScheduleSimple({ tecnicos=[], tickets=[], view='
                           { it.tech && (it.tech.avatar || it.tech.foto || it.tech.image) ? (
                             <img src={it.tech.avatar||it.tech.foto||it.tech.image} alt={it.tech.nombre||''} style={{width:18,height:18,borderRadius:9,objectFit:'cover',flex:'0 0 auto'}} />
                           ) : (
-                            <div style={{width:18,height:18,borderRadius:9,background:'rgba(255,255,255,0.12)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:10,fontWeight:700,flex:'0 0 auto'}}>{initials(it.raw.tecnico || it.raw.tecnico_nombre || it.tech?.nombre || '')}</div>
+                            <div style={{width:18,height:18,borderRadius:9,background:'rgba(255,255,255,0.12)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:10,fontWeight:700,flex:'0 0 auto'}}>{initials(getDisplayValue(it.raw, 'tecnico_nombre', 'tecnico', 'tecnico_email') || it.tech?.nombre || '')}</div>
                           )}
                           <div style={{overflow:'hidden',textOverflow:'ellipsis'}}>
-                            <div style={{fontWeight:700, fontSize:12}}>#{it.raw.id} {it.raw.solicitante? (' - '+ (it.raw.solicitante)): ''}</div>
+                            <div style={{fontWeight:700, fontSize:12}}>#{it.raw.id} {getDisplayValue(it.raw, 'solicitante_nombre', 'solicitante', 'usuario') ? (' - ' + getDisplayValue(it.raw, 'solicitante_nombre', 'solicitante', 'usuario')) : ''}</div>
                           </div>
                         </div>
                       )
@@ -402,9 +410,17 @@ export default function CalendarScheduleSimple({ tecnicos=[], tickets=[], view='
         {tooltip.visible && tooltip.data && (
           <div style={{position:'fixed', left: tooltip.x, top: tooltip.y, zIndex:9999, background:'#0f172a', color:'#fff', padding:12, borderRadius:10, boxShadow:'0 8px 28px rgba(2,6,23,0.45)', minWidth:320, maxWidth:420}}>
             <div style={{fontWeight:800, marginBottom:6}}>Tique #{tooltip.data.id}{ tooltip.data.isEscalado ? ' • ESCALADO' : ''}</div>
-            <div style={{fontSize:12, opacity:0.95}}>{tooltip.data.solicitante || tooltip.data.usuario || ''}</div>
-            <div style={{fontSize:12, opacity:0.9, marginTop:6}}>{tooltip.data.estado || ''}</div>
-            <div style={{fontSize:11, opacity:0.85, marginTop:8}}>{tooltip.data.tecnico ? ('Técnico: ' + tooltip.data.tecnico) : ''}</div>
+            <div style={{fontSize:12, opacity:0.95, marginBottom:4}}>{getDisplayValue(tooltip.data, 'solicitante_nombre', 'solicitante', 'usuario') || 'Sin solicitante'}</div>
+            <div style={{fontSize:12, opacity:0.95, marginBottom:4}}>{getDisplayValue(tooltip.data, 'area_nombre', 'area') ? ('Área: ' + getDisplayValue(tooltip.data, 'area_nombre', 'area')) : ''}</div>
+            <div style={{fontSize:12, opacity:0.95, marginBottom:4}}>{getDisplayValue(tooltip.data, 'maquina_nombre', 'maquina') ? ('Máquina: ' + getDisplayValue(tooltip.data, 'maquina_nombre', 'maquina')) : ''}</div>
+            <div style={{fontSize:12, opacity:0.9, marginTop:4}}>{tooltip.data.estado || 'Sin estado'}</div>
+            <div style={{fontSize:11, opacity:0.85, marginTop:8}}>{getDisplayValue(tooltip.data, 'tecnico_nombre', 'tecnico', 'tecnico_email') ? ('Técnico: ' + getDisplayValue(tooltip.data, 'tecnico_nombre', 'tecnico', 'tecnico_email')) : 'Sin técnico'}</div>
+            {tooltip.data.escalado && (
+              <>
+                <div style={{fontSize:11, opacity:0.85, marginTop:6}}>{getDisplayValue(tooltip.data.escalado, 'proveedor_nombre', 'proveedor') ? ('Proveedor: ' + getDisplayValue(tooltip.data.escalado, 'proveedor_nombre', 'proveedor')) : ''}</div>
+                <div style={{fontSize:11, opacity:0.85, marginTop:2}}>{getDisplayValue(tooltip.data.escalado, 'responsable_nombre', 'responsable') ? ('Responsable: ' + getDisplayValue(tooltip.data.escalado, 'responsable_nombre', 'responsable')) : ''}</div>
+              </>
+            )}
             <div style={{fontSize:11, opacity:0.75, marginTop:6}}>
               {tooltip.data.fecha_creacion? ('Inicio: ' + formatDate(tooltip.data.fecha_creacion)) : ''}
               {' '}

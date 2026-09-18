@@ -19,6 +19,7 @@ export default function SuperDashboard(){
   const [usuarios, setUsuarios] = useState([]);
   const [tickets, setTickets] = useState([]);
   const [escalados, setEscalados] = useState([]);
+  const [selectedInfoTicket, setSelectedInfoTicket] = useState(null);
   const [filter, setFilter] = useState('');
   const [calendarView, setCalendarView] = useState('week');
   const [calendarDate, setCalendarDate] = useState(() => (new Date()).toISOString().slice(0,10));
@@ -54,17 +55,64 @@ export default function SuperDashboard(){
     }catch(e){ console.error('Carga Super error', e); }
   }
 
+  function sortHistorialAsc(historial){
+    return [...(historial || [])].sort((a, b) => {
+      const da = a && a.fecha ? new Date(a.fecha).getTime() : 0;
+      const db = b && b.fecha ? new Date(b.fecha).getTime() : 0;
+      return da - db;
+    });
+  }
+
   async function loadHistorial(ticketId){
     try{
       setHistorial([]);
       setHistorialTicketId(ticketId);
       const res = await api('/historial?ticket_id='+encodeURIComponent(String(ticketId)));
-      // endpoint returns { historial: [...] } or array
-      setHistorial(res.historial || res || []);
+      const items = res.historial || res || [];
+      setHistorial(sortHistorialAsc(items));
     }catch(e){ console.error('Error cargando historial', e); setHistorial([]); }
   }
 
   function closeHistorial(){ setHistorial([]); setHistorialTicketId(null); }
+
+  function formatDateTime(value){
+    if(!value) return '—';
+    const d = new Date(value);
+    if(Number.isNaN(d.getTime())) return String(value);
+    return new Intl.DateTimeFormat('es-EC', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+      timeZone: 'America/Guayaquil'
+    }).format(d);
+  }
+
+  function getEscaladoInfo(ticketId){
+    return (escalados || []).find(e => String(e.ticket_id) === String(ticketId)) || null;
+  }
+
+  function getTicketStateDate(ticket){
+    if (!ticket) return null;
+    const estado = String(ticket.estado || '').toLowerCase();
+    const escalado = getEscaladoInfo(ticket.id);
+    if (estado.includes('resuelto')) return ticket.fecha_resuelto || escalado?.fecha_resuelto || ticket.fecha_creacion || null;
+    if (estado.includes('espera')) return ticket.fecha_en_espera || escalado?.fecha_en_espera || escalado?.fecha_escalado || ticket.fecha_creacion || null;
+    if (estado.includes('proceso')) return ticket.fecha_en_proceso || escalado?.fecha_en_proceso || escalado?.fecha_escalado || ticket.fecha_creacion || null;
+    if (estado.includes('escalado a servidor externo')) return escalado?.fecha_escalado || ticket.fecha_escalado || ticket.fecha_creacion || null;
+    return ticket.fecha_creacion || null;
+  }
+
+  function getEscaladoStateDate(escalado){
+    if (!escalado) return null;
+    const estado = String(escalado.estado || '').toLowerCase();
+    if (estado.includes('resuelto')) return escalado.fecha_resuelto || escalado.fecha_escalado || null;
+    if (estado.includes('espera')) return escalado.fecha_en_espera || escalado.fecha_escalado || null;
+    if (estado.includes('proceso')) return escalado.fecha_en_proceso || escalado.fecha_escalado || null;
+    return escalado.fecha_escalado || null;
+  }
 
   function downloadCSV(rows, filename){
     if(!rows || !rows.length) return;
@@ -83,6 +131,13 @@ export default function SuperDashboard(){
   }
 
   const tecnicos = useMemo(() => (usuarios || []).filter(u => String(u.rol || '').toLowerCase().includes('tecnico')), [usuarios]);
+
+  function resolveTicketName(ticket, field, idField, fallback) {
+    const value = ticket?.[field] || ticket?.[fallback] || '';
+    if (value) return value;
+    const idValue = ticket?.[idField];
+    return idValue !== undefined && idValue !== null && idValue !== '' ? String(idValue) : '';
+  }
 
   function getFilteredTickets({ ticketsList = tickets, view = calendarView, date = calendarDate, tecnico = calendarTecnico, onlyAvailable = calendarOnlyAvailable } = {}){
     if(!ticketsList) return [];
@@ -123,7 +178,15 @@ export default function SuperDashboard(){
       if(tecnico){
         const norm = s => s ? String(s).toLowerCase().trim() : '';
         const tc = norm(tecnico);
-        const ticketFields = [t.tecnico, t.tecnico_email, t.tecnico_id, t.tecnicoNombre, t.tecnico_nombre, t.tecnicoId].map(norm);
+        const ticketFields = [
+          t.tecnico,
+          t.tecnico_email,
+          t.tecnico_nombre,
+          t.tecnicoNombre,
+          t.tecnico_id,
+          t.tecnicoId,
+          t.tecnicoId || t.tecnico_id,
+        ].map(norm);
         const matches = ticketFields.some(f => f && (f === tc || f.includes(tc)));
         if(!matches) return false;
       }
@@ -299,22 +362,29 @@ export default function SuperDashboard(){
                       <th style={{textAlign:'left',padding:8,background:'#f3f4f6',fontWeight:700}}>Máquina</th>
                       <th style={{textAlign:'left',padding:8,background:'#f3f4f6',fontWeight:700}}>Estado</th>
                       <th style={{textAlign:'left',padding:8,background:'#f3f4f6',fontWeight:700}}>Técnico</th>
+                      <th style={{textAlign:'left',padding:8,background:'#f3f4f6',fontWeight:700}}>Acciones</th>
                     </tr>
                   </thead>
                   <tbody>
                     {(() => {
                       const start = (reportPage - 1) * reportPageSize;
                       const pageItems = (filteredTickets || []).slice(start, start + reportPageSize);
-                      if(pageItems.length === 0) return (<tr><td colSpan={7} style={{padding:12}}>No hay eventos para la selección.</td></tr>);
+                      if(pageItems.length === 0) return (<tr><td colSpan={8} style={{padding:12}}>No hay eventos para la selección.</td></tr>);
                       return pageItems.map(t => (
                         <tr key={t.id} style={{borderTop:'1px solid #161515'}}>
                           <td style={{padding:8}}>{t.id}</td>
                           <td style={{padding:8}}>{formatDate(t.fecha_creacion || t.fecha || t.fecha_programada)}</td>
-                          <td style={{padding:8}}>{t.solicitante || t.usuario || ''}</td>
-                          <td style={{padding:8}}>{t.area || ''}</td>
-                          <td style={{padding:8}}>{t.maquina || ''}</td>
+                          <td style={{padding:8}}>{resolveTicketName(t, 'solicitante_nombre', 'solicitante_id', 'solicitante') || t.usuario || ''}</td>
+                          <td style={{padding:8}}>{resolveTicketName(t, 'area_nombre', 'area_id', 'area') || ''}</td>
+                          <td style={{padding:8}}>{resolveTicketName(t, 'maquina_nombre', 'maquina_id', 'maquina') || ''}</td>
                           <td style={{padding:8}}>{t.estado || ''}</td>
-                          <td style={{padding:8}}>{t.tecnico || ''}</td>
+                          <td style={{padding:8}}>{resolveTicketName(t, 'tecnico_nombre', 'tecnico_id', 'tecnico') || ''}</td>
+                          <td style={{padding:8, whiteSpace:'nowrap'}}>
+                            <div style={{ display:'flex', alignItems:'center', gap:6, flexWrap:'nowrap' }}>
+                              <button type="button" onClick={()=> setSelectedInfoTicket(t)} style={{padding:'6px 8px',borderRadius:6,cursor:'pointer',whiteSpace:'nowrap'}}>Info</button>
+                              <button type="button" onClick={()=>loadHistorial(t.id)} style={{padding:'6px 8px',borderRadius:6,cursor:'pointer',whiteSpace:'nowrap'}}>Historial</button>
+                            </div>
+                          </td>
                         </tr>
                       ));
                     })()}
@@ -438,13 +508,13 @@ export default function SuperDashboard(){
                     <tr key={t.id} style={{borderTop:'1px solid #eee'}}>
                       <td style={{padding:8}}>{t.id}</td>
                       <td style={{padding:8}}>{formatDate(t.fecha_creacion)}</td>
-                      <td style={{padding:8}}>{t.solicitante}</td>
-                      <td style={{padding:8}}>{t.area}</td>
-                      <td style={{padding:8}}>{t.maquina}</td>
+                      <td style={{padding:8}}>{resolveTicketName(t, 'solicitante_nombre', 'solicitante_id', 'solicitante')}</td>
+                      <td style={{padding:8}}>{resolveTicketName(t, 'area_nombre', 'area_id', 'area')}</td>
+                      <td style={{padding:8}}>{resolveTicketName(t, 'maquina_nombre', 'maquina_id', 'maquina')}</td>
                       <td style={{padding:8}}>{t.urgencia}</td>
-                      <td style={{padding:8,whiteSpace:'pre-wrap'}}>{t.descripcion}</td>
+                      <td style={{padding:8}}><input disabled value={t.descripcion || ''} style={{minWidth:120,width:'auto',padding:6,borderRadius:4,border:'1px solid #e6eef8',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',background:'#fff',color:'#111827'}} /></td>
                       <td style={{padding:8}}>{t.estado}</td>
-                      <td style={{padding:8}}>{t.tecnico}</td>
+                      <td style={{padding:8}}>{resolveTicketName(t, 'tecnico_nombre', 'tecnico_id', 'tecnico')}</td>
                       <td style={{padding:8}}>{formatDate(t.fecha_asignacion)}</td>
                       <td style={{padding:8}}>{formatDate(t.fecha_en_proceso)}</td>
                       <td style={{padding:8}}>{formatDate(t.fecha_en_espera)}</td>
@@ -452,8 +522,10 @@ export default function SuperDashboard(){
                       <td style={{padding:8}}>{formatDate(t.fecha_escalado)}</td>
                       <td style={{padding:8,whiteSpace:'pre-wrap'}}>{t.nota}</td>
                       <td style={{padding:8}}>{formatDate(t.ultima_actualizacion)}</td>
-                      <td style={{padding:8}}>
-                        <button onClick={()=>loadHistorial(t.id)} style={{padding:'6px 8px',borderRadius:6,cursor:'pointer'}}>Historial</button>
+                      <td style={{padding:8, whiteSpace:'nowrap'}}>
+                        <div style={{ display:'flex', alignItems:'center', gap:6, flexWrap:'nowrap' }}>
+                          <button onClick={()=>loadHistorial(t.id)} style={{padding:'6px 8px',borderRadius:6,cursor:'pointer',whiteSpace:'nowrap'}}>Historial</button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -493,21 +565,24 @@ export default function SuperDashboard(){
                     <tr key={e.id} style={{borderTop:'1px solid #eee'}}>
                       <td style={{padding:8}}>{e.ticket_id}</td>
                       <td style={{padding:8}}>{formatDate(e.fecha_escalado)}</td>
-                      <td style={{padding:8}}>{e.proveedor}</td>
+                      <td style={{padding:8}}>{e.proveedor_nombre || e.proveedor}</td>
                       <td style={{padding:8}}>{e.estado}</td>
                       <td style={{padding:8}}>{formatDate(e.fecha_en_proceso)}</td>
                       <td style={{padding:8}}>{formatDate(e.fecha_en_espera)}</td>
                       <td style={{padding:8}}>{formatDate(e.fecha_resuelto)}</td>
-                      <td style={{padding:8}}>{e.solicitante}</td>
-                      <td style={{padding:8}}>{e.area}</td>
-                      <td style={{padding:8}}>{e.maquina}</td>
+                      <td style={{padding:8}}>{e.solicitante_nombre || e.solicitante}</td>
+                      <td style={{padding:8}}>{e.area_nombre || e.area}</td>
+                      <td style={{padding:8}}>{e.maquina_nombre || e.maquina}</td>
                       <td style={{padding:8}}>{e.urgencia}</td>
-                      <td style={{padding:8,whiteSpace:'pre-wrap'}}>{e.descripcion}</td>
-                      <td style={{padding:8}}>{e.responsable}</td>
+                      <td style={{padding:8}}><input disabled value={e.descripcion || ''} style={{minWidth:120,width:'auto',padding:6,borderRadius:4,border:'1px solid #e6eef8',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',background:'#fff',color:'#111827'}} /></td>
+                      <td style={{padding:8}}>{e.responsable_nombre || e.responsable}</td>
                       <td style={{padding:8,whiteSpace:'pre-wrap'}}>{e.nota}</td>
                       <td style={{padding:8,whiteSpace:'pre-wrap'}}>{e.observaciones}</td>
-                      <td style={{padding:8}}>
-                        <button onClick={()=>loadHistorial(e.ticket_id)} style={{padding:'6px 8px',borderRadius:6,cursor:'pointer'}}>Historial</button>
+                      <td style={{padding:8, whiteSpace:'nowrap'}}>
+                        <div style={{ display:'flex', alignItems:'center', gap:6, flexWrap:'nowrap' }}>
+                          <button type="button" onClick={()=> setSelectedInfoTicket({ ...e, id: e.ticket_id, estado: e.estado, area_nombre: e.area_nombre || e.area, maquina_nombre: e.maquina_nombre || e.maquina, solicitante_nombre: e.solicitante_nombre || e.solicitante, descripcion: e.descripcion || '', urgencia: e.urgencia || '' })} style={{padding:'6px 8px',borderRadius:6,cursor:'pointer',whiteSpace:'nowrap'}}>Info</button>
+                          <button type="button" onClick={()=>loadHistorial(e.ticket_id)} style={{padding:'6px 8px',borderRadius:6,cursor:'pointer',whiteSpace:'nowrap'}}>Historial</button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -517,26 +592,72 @@ export default function SuperDashboard(){
           </div>
         )}
 
-        {historialTicketId && String(historialTicketId) && (
-          <div style={{marginTop:12}} className="card">
-            <h4>Historial del tique {historialTicketId} ({(historial||[]).length})</h4>
-            <div className="super-table-wrap" style={{overflowX:'auto'}}>
-              <table className="super-table" style={{width:'100%',borderCollapse:'collapse',minWidth:800}}>
-                <thead><tr><th style={{textAlign:'left',padding:8,background:'#f3f4f6',fontWeight:700}}>Fecha</th><th style={{textAlign:'left',padding:8,background:'#f3f4f6',fontWeight:700}}>Acción</th><th style={{textAlign:'left',padding:8,background:'#f3f4f6',fontWeight:700}}>Estado</th><th style={{textAlign:'left',padding:8,background:'#f3f4f6',fontWeight:700}}>Usuario</th><th style={{textAlign:'left',padding:8,background:'#f3f4f6',fontWeight:700}}>Detalle</th></tr></thead>
-                <tbody>
-                  {(historial||[]).map((h,i)=> (
-                    <tr key={i} style={{borderTop:'1px solid #eee'}}>
-                      <td style={{padding:8}}>{formatDate(h.fecha)}</td>
-                      <td style={{padding:8}}>{h.accion}</td>
-                      <td style={{padding:8}}>{h.estado}</td>
-                      <td style={{padding:8}}>{h.usuario}</td>
-                      <td style={{padding:8,whiteSpace:'pre-wrap'}}>{h.detalle}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+        {selectedInfoTicket && (
+          <div style={{ position:'fixed', inset:0, background:'rgba(15, 23, 42, 0.18)', display:'flex', justifyContent:'center', alignItems:'center', zIndex:2000, padding:20 }} onClick={()=> setSelectedInfoTicket(null)}>
+            <div onClick={e => e.stopPropagation()} style={{ background:'#fff', borderRadius:18, padding:20, width:'min(760px, 92vw)', maxHeight:'82vh', overflowY:'auto', boxShadow:'0 30px 60px rgba(15, 23, 42, 0.22)' }}>
+              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:12, marginBottom:18 }}>
+                <div style={{ fontSize:18, fontWeight:700, color:'#0f172a' }}>Detalle del tique {selectedInfoTicket.id || '—'}</div>
+                <button onClick={()=> setSelectedInfoTicket(null)} style={{ border:'none', background:'#e2e8f0', color:'#0f172a', borderRadius:8, padding:'8px 14px', cursor:'pointer', fontWeight:600 }}>Cerrar</button>
+              </div>
+
+              <div style={{ display:'grid', gap:10, color:'#0f172a' }}>
+                <div><strong>Estado:</strong> <span>{selectedInfoTicket.estado || '—'}</span></div>
+                <div><strong>Fecha del estado:</strong> <span>{getTicketStateDate(selectedInfoTicket) ? formatDateTime(getTicketStateDate(selectedInfoTicket)) : '—'}</span></div>
+                <div><strong>Fecha de creación del tique:</strong> <span>{selectedInfoTicket.fecha_creacion ? formatDateTime(selectedInfoTicket.fecha_creacion) : '—'}</span></div>
+                <div><strong>Área:</strong> <span>{selectedInfoTicket.area_nombre || selectedInfoTicket.area || '—'}</span></div>
+                <div><strong>Máquina:</strong> <span>{selectedInfoTicket.maquina_nombre || selectedInfoTicket.maquina || '—'}</span></div>
+                <div><strong>Urgencia:</strong> <span>{selectedInfoTicket.urgencia || '—'}</span></div>
+                <div><strong>Solicitante:</strong> <span>{selectedInfoTicket.solicitante_nombre || selectedInfoTicket.solicitante || '—'}</span></div>
+                <div><strong>Descripción:</strong> <span>{selectedInfoTicket.descripcion || '—'}</span></div>
+              </div>
+
+              {String(selectedInfoTicket.estado || '').toLowerCase().includes('escalado a servidor externo') && (() => {
+                const escalado = getEscaladoInfo(selectedInfoTicket.id);
+                if(!escalado) return null;
+                return (
+                  <div style={{ marginTop:18, borderTop:'1px solid #e5e7eb', paddingTop:16 }}>
+                    <div style={{ fontSize:16, fontWeight:700, marginBottom:10 }}>Información del escalado</div>
+                    <div style={{ display:'grid', gap:10 }}>
+                      <div><strong>Proveedor:</strong> <span>{escalado.proveedor_nombre || escalado.proveedor || '—'}</span></div>
+                      <div><strong>Responsable:</strong> <span>{escalado.responsable_nombre || escalado.responsable || '—'}</span></div>
+                      <div><strong>Estado del escalado:</strong> <span>{escalado.estado || '—'}</span></div>
+                      <div><strong>Fecha del estado:</strong> <span>{getEscaladoStateDate(escalado) ? formatDateTime(getEscaladoStateDate(escalado)) : '—'}</span></div>
+                      <div><strong>Nota:</strong> <span>{escalado.nota || '—'}</span></div>
+                      <div><strong>Observaciones:</strong> <span>{escalado.observaciones || '—'}</span></div>
+                      <div><strong>Fecha de escalado a servidor externo:</strong> <span>{escalado.fecha_escalado ? formatDateTime(escalado.fecha_escalado) : '—'}</span></div>
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
-            <div style={{marginTop:8}}><button onClick={closeHistorial} style={{padding:'6px 10px',borderRadius:6}}>Cerrar historial</button></div>
+          </div>
+        )}
+
+        {historialTicketId && String(historialTicketId) && (
+          <div style={{ position:'fixed', inset:0, background:'rgba(15, 23, 42, 0.18)', display:'flex', justifyContent:'center', alignItems:'center', zIndex:2000, padding:20 }} onClick={closeHistorial}>
+            <div onClick={e => e.stopPropagation()} style={{ background:'#fff', borderRadius:18, padding:20, width:'min(900px, 92vw)', maxHeight:'82vh', overflowY:'auto', boxShadow:'0 30px 60px rgba(15, 23, 42, 0.22)' }}>
+              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:12, marginBottom:18 }}>
+                <div style={{ fontSize:18, fontWeight:700, color:'#0f172a' }}>Historial del tique {historialTicketId} ({(historial||[]).length})</div>
+                <button onClick={closeHistorial} style={{ border:'none', background:'#e2e8f0', color:'#0f172a', borderRadius:8, padding:'8px 14px', cursor:'pointer', fontWeight:600 }}>Cerrar</button>
+              </div>
+              <div className="super-table-wrap" style={{overflowX:'auto'}}>
+                <table className="super-table" style={{width:'100%',borderCollapse:'collapse',minWidth:800}}>
+                  <thead><tr><th style={{textAlign:'left',padding:8,background:'#f3f4f6',fontWeight:700}}>Fecha</th><th style={{textAlign:'left',padding:8,background:'#f3f4f6',fontWeight:700}}>Acción</th><th style={{textAlign:'left',padding:8,background:'#f3f4f6',fontWeight:700}}>Estado</th><th style={{textAlign:'left',padding:8,background:'#f3f4f6',fontWeight:700}}>Usuario</th><th style={{textAlign:'left',padding:8,background:'#f3f4f6',fontWeight:700}}>Detalle</th></tr></thead>
+                  <tbody>
+                    {(historial||[]).map((h,i)=> (
+                      <tr key={i} style={{borderTop:'1px solid #eee'}}>
+                        <td style={{padding:8}}>{formatDate(h.fecha)}</td>
+                        <td style={{padding:8}}>{h.accion}</td>
+                        <td style={{padding:8}}>{h.estado}</td>
+                        <td style={{padding:8}}>{h.usuario}</td>
+                        <td style={{padding:8,whiteSpace:'pre-wrap'}}>{h.detalle}</td>
+                      </tr>
+                    ))}
+                    {(!historial || historial.length===0) && <tr><td colSpan={5} style={{padding:12}}>No hay historial para este tique.</td></tr>}
+                  </tbody>
+                </table>
+              </div>
+            </div>
           </div>
         )}
 

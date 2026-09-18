@@ -5,6 +5,31 @@ import { formatDate, statusClass } from '../lib/format'
 import { useToast } from '../components/ToastProvider'
 import { useDialog } from '../components/DialogProvider'
 
+export function normalizeTicketState(value){
+  return ((value || '') + '').toString().trim().toLowerCase();
+}
+
+export function isActiveTicketState(value){
+  const estado = normalizeTicketState(value);
+  return estado === 'abierto' || estado === 'en proceso' || estado === 'en espera';
+}
+
+export function isResolvedTicketState(value){
+  return normalizeTicketState(value) === 'resuelto';
+}
+
+export function isEscalatedTicketState(value){
+  const estado = normalizeTicketState(value);
+  return estado.includes('escalado');
+}
+
+function resolveTicketName(ticket, preferredField, fallbackIdField, fallbackField) {
+  const value = ticket?.[preferredField] || ticket?.[fallbackField] || '';
+  if (value) return value;
+  const fallbackValue = ticket?.[fallbackIdField];
+  return fallbackValue !== undefined && fallbackValue !== null && fallbackValue !== '' ? String(fallbackValue) : '';
+}
+
 export default function Tecnico(){
   const { data: session } = useSession();
   const [tiques, setTiques] = useState([]);
@@ -15,6 +40,7 @@ export default function Tecnico(){
   const [actionLoading, setActionLoading] = useState(false);
   const [tecnicos, setTecnicos] = useState([]);
   const [actionData, setActionData] = useState({}); // { [ticketId]: { estado, nota, tecnico } }
+  const [selectedTicketInfo, setSelectedTicketInfo] = useState(null);
   const showToast = useToast()
   const { openPrompt, openConfirm } = useDialog()
 
@@ -61,9 +87,7 @@ export default function Tecnico(){
     if(!estado) return showToast('Selecciona un estado', 'error');
     try{
       setActionLoading(true);
-      // Si el nuevo estado es escalado a servidor externo, crear un escalado en vez de actualizar directamente el ticket
       if((estado||'').toString().toLowerCase().includes('escalado')){
-        // pedir proveedor/motivo
         const proveedor = await openPrompt('Proveedor o motivo de escalado:', ad.proveedor || '');
         if(!proveedor) return showToast('Proveedor requerido para escalado', 'error');
         const ok = await openConfirm('Confirmar escalado a: ' + proveedor + '?');
@@ -73,17 +97,34 @@ export default function Tecnico(){
         showToast('Escalado creado', 'success');
         await load();
       } else {
-        await api('/tickets/'+id, { method:'PUT', body: JSON.stringify({ estado, nota, tecnico: ad.tecnico }) });
-        // refrescar lista
+        await api('/tickets/'+id, { method:'PUT', body: JSON.stringify({ estado, nota, tecnico: ad.tecnico || '', tecnico_id: ad.tecnico_id || '' }) });
         await load();
       }
     }catch(err){ showToast(err.message || 'Error', 'error'); }
     finally{ setActionLoading(false); }
   }
 
-  async function asignar(id, email){
-    if(!email) return showToast('No se seleccionó técnico', 'error');
-    try{ setActionLoading(true); await api('/tickets/'+id, { method:'PUT', body: JSON.stringify({ tecnico: email }) }); await load(); }
+  async function asignar(id, tecnicoSeleccionado){
+    const tecnicoId = tecnicoSeleccionado && tecnicoSeleccionado.tecnico_id ? tecnicoSeleccionado.tecnico_id : null;
+    const email = tecnicoSeleccionado && tecnicoSeleccionado.email ? tecnicoSeleccionado.email : tecnicoSeleccionado || '';
+    const nombreTecnico = tecnicoSeleccionado && tecnicoSeleccionado.nombre ? tecnicoSeleccionado.nombre : (tecnicos.find(tc => String(tc.id) === String(tecnicoId))?.nombre || email || 'Sin técnico');
+    if(!email && !tecnicoId) return showToast('No se seleccionó técnico', 'error');
+    try{
+      setActionLoading(true);
+      const ticketActual = (tiques || []).find(t => String(t.id) === String(id)) || {};
+      const notaActual = (actionData[id] && actionData[id].nota) || '';
+      const detalleNota = notaActual ? `${notaActual} | Asignado a ${nombreTecnico}` : `Asignado a ${nombreTecnico}`;
+      await api('/tickets/'+id, {
+        method:'PUT',
+        body: JSON.stringify({
+          estado: ticketActual.estado || 'Abierto',
+          nota: detalleNota,
+          tecnico: email,
+          tecnico_id: tecnicoId || undefined
+        })
+      });
+      await load();
+    }
     catch(e){ showToast(e.message || e, 'error'); }
     finally{ setActionLoading(false); }
   }
@@ -102,6 +143,15 @@ export default function Tecnico(){
     }
     catch(e){ showToast(e.message || e, 'error'); }
     finally{ setActionLoading(false); }
+  }
+
+  function openTicketInfo(ticket){
+    if(!ticket) return;
+    setSelectedTicketInfo(ticket);
+  }
+
+  function closeTicketInfo(){
+    setSelectedTicketInfo(null);
   }
 
 
@@ -131,19 +181,24 @@ export default function Tecnico(){
           </div>
         </div>
         <div className="spreadsheetTableRoot" style={{overflowX:'auto'}}>
-          <table className="fixedTable" style={{width:'100%',borderCollapse:'collapse',minWidth:800}}>
-            <thead><tr><th>ID</th><th>Fecha</th><th>Solicitante</th><th>Área</th><th>Máquina</th><th>Fallo</th><th>Urgencia</th><th>Estado</th><th>Acción</th></tr></thead>
+          <table className="fixedTable" style={{width:'100%',borderCollapse:'collapse',minWidth:900}}>
+            <thead><tr><th>ID</th><th>Fecha</th><th>Solicitante</th><th>Área</th><th>Máquina</th><th>Fallo</th><th>Urgencia</th><th>Estado</th><th>Información</th><th>Acción</th></tr></thead>
             <tbody>
               {(() => {
                 let list = tiques.slice();
                 // filtrar por pestaña
                 if(viewTab==='mis'){
                   const me = session?.user?.email || session?.user?.id || '';
-                  list = list.filter(x=> (x.tecnico||'').toString().toLowerCase() === me.toString().toLowerCase() || (session?.user?.rol||'').toLowerCase()==='admin');
+                  list = list.filter(x => {
+                    const isMine = ((x.tecnico_nombre || x.tecnico || '') + '').toString().toLowerCase() === me.toString().toLowerCase()
+                      || ((x.tecnico_email || x.tecnico || '') + '').toString().toLowerCase() === me.toString().toLowerCase()
+                      || (session?.user?.rol || '').toLowerCase() === 'admin';
+                    return isMine && isActiveTicketState(x.estado);
+                  });
                 } else if(viewTab==='resueltos'){
-                  list = list.filter(x=> ((x.estado||'') + '').toLowerCase() === 'resuelto');
+                  list = list.filter(x => isResolvedTicketState(x.estado));
                 } else if(viewTab==='escalados'){
-                  list = list.filter(x=> ((x.estado||'') + '').toLowerCase().includes('escalado') || (escalados||[]).some(e=>e.ticket_id==x.id));
+                  list = list.filter(x => isEscalatedTicketState(x.estado) || (escalados || []).some(e => String(e.ticket_id) === String(x.id)));
                 }
                 // búsqueda
                 if(query && query.trim()){
@@ -152,24 +207,29 @@ export default function Tecnico(){
                 }
                 // ordenar
                 if(sortMode==='fecha_asc') list.sort((a,b)=> new Date(a.fecha_creacion||a.fecha) - new Date(b.fecha_creacion||b.fecha));
-                else if(sortMode==='alpha') list.sort((a,b)=> (a.solicitante||'').localeCompare(b.solicitante||''));
+                else if(sortMode==='alpha') list.sort((a,b)=> ((a.solicitante_nombre || a.solicitante || '')).localeCompare((b.solicitante_nombre || b.solicitante || '')));
                 else list.sort((a,b)=> new Date(b.fecha_creacion||b.fecha) - new Date(a.fecha_creacion||a.fecha));
 
-                if(list.length===0) return <tr><td colSpan={9}>No hay tiques.</td></tr>;
+                if(list.length===0) return <tr><td colSpan={10}>No hay tiques.</td></tr>;
                 return list.map(t => (
                   <tr key={t.id}>
                     <td data-label="ID">{t.id}</td>
                     <td data-label="Fecha">{formatDate(t.fecha_creacion || t.fecha)}</td>
-                    <td data-label="Solicitante">{t.solicitante}</td>
-                    <td data-label="Área">{t.area}</td>
-                    <td data-label="Máquina">{t.maquina}</td>
+                    <td data-label="Solicitante">{t.solicitante_nombre || t.solicitante || ''}</td>
+                    <td data-label="Área">{t.area_nombre || t.area || ''}</td>
+                    <td data-label="Máquina">{t.maquina_nombre || t.maquina || ''}</td>
                     <td data-label="Fallo">{t.descripcion}</td>
                     <td data-label="Urgencia">{t.urgencia}</td>
                     <td data-label="Estado"><span className={"badge " + statusClass(t.estado)}>{t.estado}</span></td>
+                    <td data-label="Información">
+                      <button type="button" onClick={()=>openTicketInfo(t)} className="btn-secondary" title="Ver información del ticket" style={{minWidth: 34, padding: '6px 8px'}}>Info</button>
+                    </td>
                     <td data-label="Acción">
                       <div style={{display:'flex',flexDirection:'column',gap:8}}>
                         {(() => {
-                          const bloqueado = ((t.estado||'') + '').toLowerCase() === 'resuelto';
+                          const estadoNorm = ((t.estado || '') + '').toLowerCase();
+                          const bloqueado = estadoNorm === 'resuelto' || estadoNorm.includes('escalado');
+                          const selectedTecnicoId = (actionData[t.id] && (actionData[t.id].tecnico_id ?? actionData[t.id].tecnico)) || (t.tecnico_id || t.tecnico || '');
                           return (
                             <>
                               <select disabled={bloqueado} value={(actionData[t.id] && actionData[t.id].estado) || t.estado || 'Abierto'} onChange={e=>setActionData(a=>({ ...a, [t.id]: { ...(a[t.id]||{}), estado: e.target.value } }))}>
@@ -181,14 +241,22 @@ export default function Tecnico(){
                               </select>
                               <textarea disabled={bloqueado} placeholder="Nota/acción" value={(actionData[t.id] && actionData[t.id].nota) || ''} onChange={e=>setActionData(a=>({ ...a, [t.id]: { ...(a[t.id]||{}), nota: e.target.value } }))} rows={2} />
                               <div style={{display:'flex',gap:8}}>
-                                <select disabled={bloqueado} value={(actionData[t.id] && actionData[t.id].tecnico) || (t.tecnico || '')} onChange={e=>setActionData(a=>({ ...a, [t.id]: { ...(a[t.id]||{}), tecnico: e.target.value } }))}>
+                                <select disabled={bloqueado} value={selectedTecnicoId} onChange={e=>{
+                                  const chosen = e.target.value;
+                                  const tech = tecnicos.find(tc => String(tc.id) === String(chosen));
+                                  setActionData(a=>({ ...a, [t.id]: { ...(a[t.id]||{}), tecnico: tech?.email || tech?.nombre || chosen, tecnico_id: tech?.id || chosen || '' } }));
+                                }}>
                                   <option value="">-- Técnico --</option>
                                   {tecnicos.filter(tc=> (tc.rol||'').toLowerCase()!=='empleado').map(tc=> (
-                                    <option key={tc.email||tc.id} value={tc.email||tc.id}>{(tc.nombre || tc.email) + ' (' + (tc.rol||'') + ')'}</option>
+                                    <option key={tc.email||tc.id} value={String(tc.id)}>{(tc.nombre || tc.email) + ' (' + (tc.rol||'') + ')'}</option>
                                   ))}
                                 </select>
                                 <button onClick={()=>guardar(t.id)} disabled={actionLoading || bloqueado}>{actionLoading? 'Procesando...':'Actualizar'}</button>
-                                <button onClick={()=>asignar(t.id, (actionData[t.id] && actionData[t.id].tecnico) || t.tecnico)} disabled={actionLoading || bloqueado}>{actionLoading? '...':'Asignar'}</button>
+                                <button onClick={()=>asignar(t.id, {
+                                  email: (actionData[t.id] && (actionData[t.id].tecnico || '')) || (t.tecnico_email || t.tecnico || ''),
+                                  nombre: tecnicos.find(tc => String(tc.id) === String((actionData[t.id] && (actionData[t.id].tecnico_id || '')) || (t.tecnico_id || '')))?.nombre || (actionData[t.id] && (actionData[t.id].tecnico || '')) || (t.tecnico_nombre || t.tecnico || ''),
+                                  tecnico_id: (actionData[t.id] && (actionData[t.id].tecnico_id || '')) || (t.tecnico_id || '')
+                                })} disabled={actionLoading || bloqueado}>{actionLoading? '...':'Asignar'}</button>
                                 <button onClick={()=>escalar(t.id)} disabled={actionLoading || bloqueado} style={{marginLeft:8}}>{actionLoading? '...':'Escalar'}</button>
                               </div>
                             </>
@@ -202,6 +270,59 @@ export default function Tecnico(){
             </tbody>
           </table>
         </div>
+        {selectedTicketInfo && (
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.18)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 2000, padding: 20 }} onClick={closeTicketInfo}>
+            <div style={{ width: 'min(1000px, 92vw)', maxHeight: '86vh', overflowY: 'auto', background: '#f8fafc', borderRadius: 12, boxShadow: '0 24px 60px rgba(15, 23, 42, 0.18)', border: '1px solid #e5e7eb', padding: 20 }} onClick={(e)=> e.stopPropagation()}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 18 }}>
+                <div style={{ fontSize: 18, fontWeight: 700, color: '#0f172a' }}>Detalle {selectedTicketInfo.id || 'tique'}</div>
+                <button onClick={closeTicketInfo} style={{ border: 'none', background: '#e2e8f0', color: '#0f172a', borderRadius: 8, padding: '8px 14px', cursor: 'pointer', fontWeight: 600 }}>Cerrar</button>
+              </div>
+
+              <div style={{ display: 'grid', gap: 10, marginBottom: 18 }}>
+                <div><strong>Motivo:</strong> <span>{selectedTicketInfo.descripcion || '—'}</span></div>
+                <div><strong>Estado:</strong> <span>{selectedTicketInfo.estado || '—'}</span></div>
+                <div><strong>Área:</strong> <span>{resolveTicketName(selectedTicketInfo, 'area_nombre', 'area_id', 'area') || '—'}</span></div>
+                <div><strong>Urgencia:</strong> <span>{selectedTicketInfo.urgencia || '—'}</span></div>
+                <div><strong>Solicitante:</strong> <span>{resolveTicketName(selectedTicketInfo, 'solicitante_nombre', 'solicitante_id', 'solicitante') || '—'}</span></div>
+                <div><strong>Técnico:</strong> <span>{resolveTicketName(selectedTicketInfo, 'tecnico_nombre', 'tecnico_id', 'tecnico') || '—'}</span></div>
+                <div><strong>Máquina:</strong> <span>{resolveTicketName(selectedTicketInfo, 'maquina_nombre', 'maquina_id', 'maquina') || '—'}</span></div>
+                <div><strong>Fecha creación:</strong> <span>{selectedTicketInfo.fecha_creacion ? formatDate(selectedTicketInfo.fecha_creacion) : '—'}</span></div>
+                <div><strong>Fecha asignación:</strong> <span>{selectedTicketInfo.fecha_asignacion ? formatDate(selectedTicketInfo.fecha_asignacion) : '—'}</span></div>
+                <div><strong>Fecha en proceso:</strong> <span>{selectedTicketInfo.fecha_en_proceso ? formatDate(selectedTicketInfo.fecha_en_proceso) : '—'}</span></div>
+                <div><strong>Fecha en espera:</strong> <span>{selectedTicketInfo.fecha_en_espera ? formatDate(selectedTicketInfo.fecha_en_espera) : '—'}</span></div>
+                <div><strong>Fecha resuelto:</strong> <span>{selectedTicketInfo.fecha_resuelto ? formatDate(selectedTicketInfo.fecha_resuelto) : '—'}</span></div>
+                <div><strong>Nota:</strong> <span>{selectedTicketInfo.nota || '—'}</span></div>
+              </div>
+
+              {((selectedTicketInfo.detalle_items || selectedTicketInfo.items || []).length > 0) && (
+                <div style={{ overflowX: 'auto', border: '1px solid #e5e7eb', borderRadius: 8, background: '#fff' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 700 }}>
+                    <thead>
+                      <tr style={{ background: '#eef6ff' }}>
+                        <th style={{ textAlign: 'left', padding: '10px 8px', fontWeight: 700 }}>ITEM</th>
+                        <th style={{ textAlign: 'left', padding: '10px 8px', fontWeight: 700 }}>DESCRIPCIÓN</th>
+                        <th style={{ textAlign: 'left', padding: '10px 8px', fontWeight: 700 }}>CANTIDAD</th>
+                        <th style={{ textAlign: 'left', padding: '10px 8px', fontWeight: 700 }}>UNIDAD</th>
+                        <th style={{ textAlign: 'left', padding: '10px 8px', fontWeight: 700 }}>MARCA</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(selectedTicketInfo.detalle_items || selectedTicketInfo.items || []).map((item, idx) => (
+                        <tr key={`${item.id || idx}-${idx}`} style={{ borderTop: '1px solid #edf2f7' }}>
+                          <td style={{ padding: '10px 8px' }}>{item.item || item.id || idx + 1}</td>
+                          <td style={{ padding: '10px 8px' }}>{item.descripcion || item.nombre || '—'}</td>
+                          <td style={{ padding: '10px 8px' }}>{item.cantidad || item.qty || '—'}</td>
+                          <td style={{ padding: '10px 8px' }}>{item.unidad || item.unit || '—'}</td>
+                          <td style={{ padding: '10px 8px' }}>{item.marca || item.brand || '—'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
       <div className="card" style={{marginTop:12}}>
         <h3>Escalados / Servidores Externos</h3>
@@ -215,9 +336,9 @@ export default function Tecnico(){
                   <tr>
                     <td>{e.ticket_id}</td>
                     <td>{formatDate(e.fecha_escalado)}</td>
-                    <td>{e.proveedor}</td>
+                    <td>{e.proveedor_nombre || e.proveedor || ''}</td>
                     <td><span className={"badge " + statusClass(e.estado)}>{e.estado}</span></td>
-                    <td>{e.responsable}</td>
+                    <td>{e.responsable_nombre || e.responsable || ''}</td>
                     <td>{e.nota}</td>
                     <td>{e.observaciones}</td>
                     <td><button onClick={()=>toggleHistEsc(e.ticket_id)}>Historial</button></td>

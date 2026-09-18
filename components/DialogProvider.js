@@ -31,8 +31,15 @@ export default function DialogProvider({ children }){
     });
   }
 
+  function openSelect(message, options = [], title='Seleccionar', defaultValue=''){
+    return new Promise((resolve)=>{
+      resolverRef.current = resolve;
+      setDialog({ type:'select', title, message, options, defaultValue });
+    });
+  }
+
   return (
-    <DialogContext.Provider value={{ openConfirm, openPrompt }}>
+    <DialogContext.Provider value={{ openConfirm, openPrompt, openSelect }}>
       {children}
       {dialog && (
         <div style={{position:'fixed',inset:0,display:'flex',alignItems:'center',justifyContent:'center',background:'rgba(0,0,0,0.4)',zIndex:9999}}>
@@ -41,6 +48,9 @@ export default function DialogProvider({ children }){
             <div style={{marginBottom:12}}>{dialog.message}</div>
             {dialog.type === 'prompt' && (
               <PromptBody defaultValue={dialog.defaultValue} onCancel={()=>close(null)} onOk={(v)=>close(v)} />
+            )}
+            {dialog.type === 'select' && (
+              <SelectBody options={dialog.options || []} defaultValue={dialog.defaultValue || ''} onCancel={()=>close(null)} onOk={(v)=>close(v)} />
             )}
             {dialog.type === 'confirm' && (
               <div style={{display:'flex',justifyContent:'flex-end',gap:8}}>
@@ -63,6 +73,24 @@ function PromptBody({ defaultValue='', onOk, onCancel }){
       <div style={{display:'flex',justifyContent:'flex-end',gap:8}}>
         <button onClick={()=>onCancel()}>Cancelar</button>
         <button onClick={()=>onOk(value)} style={{background:'#2563eb',color:'#fff'}}>Aceptar</button>
+      </div>
+    </div>
+  )
+}
+
+function SelectBody({ options = [], defaultValue = '', onOk, onCancel }){
+  const [value, setValue] = useState(defaultValue || (options[0] && (options[0].value ?? '')) || '');
+  return (
+    <div>
+      <select autoFocus value={value} onChange={e=>setValue(e.target.value)} style={{width:'100%',padding:8,marginBottom:12}}>
+        <option value="">-- Seleccionar --</option>
+        {options.map((option, index) => (
+          <option key={option.value ?? `${option.label}-${index}`} value={option.value ?? ''}>{option.label ?? option.value ?? ''}</option>
+        ))}
+      </select>
+      <div style={{display:'flex',justifyContent:'flex-end',gap:8}}>
+        <button onClick={()=>onCancel()}>Cancelar</button>
+        <button onClick={()=>onOk(value)} disabled={!value} style={{background:'#2563eb',color:'#fff',opacity: value ? 1 : 0.6}}>Aceptar</button>
       </div>
     </div>
   )
