@@ -12,11 +12,6 @@ function resolveDisplayText(row, preferredKey, fallbackKey, idKey) {
 export default function SpreadsheetTable({ tickets = [], onCellEdit, areas = [], maquinas = [], tecnicos = [], onGuardar, onEscalar, onToggleHist, onShowInfo, serverTick=0 } ){
   const cols = useMemo(()=>[
     { key:'id', label:'ID', width:90 },
-    { key:'fecha_creacion', label:'Fecha creación', width:160 },
-    { key:'fecha_asignacion', label:'Fecha asignación', width:160 },
-    { key:'fecha_en_proceso', label:'Fecha en proceso', width:160 },
-    { key:'fecha_en_espera', label:'Fecha en espera', width:160 },
-    { key:'fecha_resuelto', label:'Fecha resuelto', width:160 },
     { key:'solicitante', label:'Solicitante', width:240 },
     { key:'area', label:'Área', width:160 },
     { key:'maquina', label:'Máquina', width:160 },
@@ -24,6 +19,11 @@ export default function SpreadsheetTable({ tickets = [], onCellEdit, areas = [],
     { key:'estado', label:'Estado', width:160 },
     { key:'tecnico', label:'Técnico', width:200 },
     { key:'descripcion', label:'Descripción', width:320 },
+    { key:'fecha_creacion', label:'Fecha creación', width:160 },
+    { key:'fecha_asignacion', label:'Fecha asignación', width:160 },
+    { key:'fecha_en_proceso', label:'Fecha en proceso', width:160 },
+    { key:'fecha_en_espera', label:'Fecha en espera', width:160 },
+    { key:'fecha_resuelto', label:'Fecha resuelto', width:160 },
     { key:'acciones', label:'Acciones', width:220 }
   ],[])
 
