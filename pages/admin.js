@@ -91,10 +91,14 @@ function downloadXLS(rows, filename){
   const html = ['<table><thead><tr>'+keys.map(k=>'<th>'+k+'</th>').join('')+'</tr></thead><tbody>'].concat(
     rows.map(r=> '<tr>'+keys.map(k=>'<td>'+String(r[k]===undefined?'':r[k])+'</td>').join('')+'</tr>')
   ).concat(['</tbody></table>']).join('');
-  const blob = new Blob([html], { type: 'application/vnd.ms-excel' });
+  
+  // SOLUCIÓN: Agregamos "\ufeff" al inicio y especificamos charset=utf-8
+  const blob = new Blob(['\ufeff' + html], { type: 'application/vnd.ms-excel;charset=utf-8;' });
+  
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a'); a.href = url; a.download = filename; a.click(); URL.revokeObjectURL(url);
 }
+
 
 function resolveTicketName(ticket, preferredField, fallbackIdField, fallbackField) {
   const value = ticket?.[preferredField] || ticket?.[fallbackField] || '';
@@ -1267,7 +1271,7 @@ export default function Admin(){
           <div className="filter-bar" style={{marginBottom:12}}>
             <div style={{marginLeft:'auto'}} className="report-actions">
               <button onClick={()=>downloadCSV(tickets.map(t=>({ id:t.id, fecha:t.fecha_creacion||t.fecha, solicitante:t.solicitante, area:t.area, maquina:t.maquina, urgencia:t.urgencia, estado:t.estado, tecnico:t.tecnico })), 'tiques.csv')}>Exportar Tiques CSV</button>
-              <button onClick={()=>downloadXLS(tickets.map(t=>({ id:t.id, fecha:t.fecha_creacion||t.fecha, solicitante:t.solicitante, area:t.area, maquina:t.maquina, urgencia:t.urgencia, estado:t.estado, tecnico:t.tecnico })), 'tiques.xls')}>Exportar Tiques XLS</button>
+              <button onClick={()=>downloadXLS(tickets.map(t=>({  id:t.id, fecha:t.fecha_creacion||t.fecha, solicitante: resolveTicketName(t, 'solicitante_nombre', 'solicitante_id', 'solicitante'), area: resolveTicketName(t, 'area_nombre', 'area_id', 'area'), maquina: resolveTicketName(t, 'maquina_nombre', 'maquina_id', 'maquina'), urgencia:t.urgencia, estado:t.estado, tecnico: resolveTicketName(t, 'tecnico_nombre', 'tecnico_id', 'tecnico')  })), 'tiques.xls')}>Exportar Tiques XLS</button>
               <button onClick={()=>downloadCSV(escalados.map(e=>({ id:e.id, ticket_id:e.ticket_id, fecha:e.fecha_escalado, proveedor:e.proveedor, estado:e.estado, responsable:e.responsable })), 'escalados.csv')}>Exportar Escalados CSV</button>
               <button onClick={()=>downloadXLS(escalados.map(e=>({ id:e.id, ticket_id:e.ticket_id, fecha:e.fecha_escalado, proveedor:e.proveedor, estado:e.estado, responsable:e.responsable })), 'escalados.xls')}>Exportar Escalados XLS</button>
             </div>
